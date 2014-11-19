@@ -1,0 +1,12 @@
+[Package]
+name        = "moustachu"
+version     = "0.1.0"
+author      = "Guillaume Viger"
+description = "Mustache templating for Nimrod"
+license     = "MIT"
+
+InstallFiles = "moustachu.nim"
+bin = "moustachu"
+
+[Deps]
+Requires: "nimrod >= 0.9.4, commandeer >= 0.4.0"
