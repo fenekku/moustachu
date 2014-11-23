@@ -10,22 +10,20 @@ Moustachu is a([N im](https://github.com/Araq/nimrod))plementation of [Mustache]
 
 import moustachu
 
-var tmplate : string
-var c : Context = newContext()
-var m : Mustache
 
-tmplate = """Hello {{name}}
+var tmplate = """Hello {{name}}
 You have just won {{value}} dollars!
 {{#in_ca}}
 Well, {{taxed_value}} dollars, after taxes.
 {{/in_ca}}"""
 
+var c : Context = newContext()
 c["name"] = "Chris"
 c["value"] = 10000
 c["taxed_value"] = 10000 - (10000 * 0.4)
 c["in_ca"] = true
 
-echo m.render(tmplate, c)
+echo render(tmplate, c)
 ```
 
 For other examples look at the `specs` directory

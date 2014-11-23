@@ -3,9 +3,6 @@ import re
 import strutils
 
 type
-  Mustache* = object
-    inSection : bool
-
   Context* = ref ContextObj
   ContextObj = object
     stringContext : TTable[string, string]
@@ -210,7 +207,7 @@ proc findClosing(tagKey: string, tmplate: string): tuple[first, last:int] =
 
   return bounds
 
-proc render*(m: var Mustache, tmplate: string, c: Context): string =
+proc render*(tmplate: string, c: Context, inSection: bool = false): string =
   var matches : array[4, string]
   var pos = 0
   var bounds : tuple[first, last: int]
@@ -229,29 +226,14 @@ proc render*(m: var Mustache, tmplate: string, c: Context): string =
       var tagKey = matches[1].strip()
       case matches[0]
       of "!":
-        #TODO use the adjustForStandaloneIndentation(...) code
         #Comments
-        var beforeBounds = tmplate[pos..bounds.first-1].findBounds(re"\s*$")
-        var afterBounds = tmplate[bounds.last+1..tmplate.len-1].findBounds(re"^\s*")
-        #above because of silly findBounds(...start=) kind-of-bug
-        var beginsTplt = beforeBounds.first == 0
-        var ms : array[1, string] = [""]
-        var beginsWithNL = (beforeBounds.first != -1) and
-                           tmplate[beforeBounds.first+pos..bounds.first-1].match(re"^(\r?\n)\s*", ms)
-        var endsTplt = (bounds.last+1+afterBounds.last) == tmplate.len-1
-        var endsWithNL = (afterBounds.first != -1) and
-                         tmplate[bounds.last+1..bounds.last+1+afterBounds.last].match(re"\r?\n$")
-
-        if (beginsTplt or beginsWithNL) and (endsTplt or endsWithNL) and not m.inSection:
-          #Standalone
-          if beginsWithNL:
-            result.add(tmplate[pos..beforeBounds.first-1])
-            result.add(ms[0]) #adds the NLEquivalent
-          pos = bounds.last+1 + afterBounds.last+1
+        if inSection:
+          discard
         else:
-          #Inline
+          adjustForStandaloneIndentation(bounds, pos, tmplate)
+        if bounds.first > 0:
           result.add(tmplate[pos..bounds.first-1])
-          pos = bounds.last + 1
+        pos = bounds.last + 1
 
       of "{", "&":
         #Triple mustache: do not htmlescape
@@ -273,21 +255,20 @@ proc render*(m: var Mustache, tmplate: string, c: Context): string =
 
         var currentContext : Context
         var currentList : seq[Context]
-        m.inSection = true
 
         if matches[0] == "#":
           if c.getContext(tagKey, currentContext):
             #Render section
             var nc = newContext(currentContext)
             nc.parent = c
-            result.add(m.render(tmplate[pos..closingBounds.first-1], nc))
+            result.add(render(tmplate[pos..closingBounds.first-1], nc, true))
           elif c.getList(tagKey, currentList):
             #Render list
             for cil in currentList:
-              result.add(m.render(tmplate[pos..closingBounds.first-1], cil))
+              result.add(render(tmplate[pos..closingBounds.first-1], cil, true))
           elif c[tagKey] != "":
             #Truthy
-            result.add(m.render(tmplate[pos..closingBounds.first-1], c))
+            result.add(render(tmplate[pos..closingBounds.first-1], c, true))
           else:
             #Falsey
             discard
@@ -297,16 +278,15 @@ proc render*(m: var Mustache, tmplate: string, c: Context): string =
             discard
           elif c.getList(tagKey, currentList):
             if currentList.len == 0:
-              result.add(m.render(tmplate[pos..closingBounds.first-1], c))
+              result.add(render(tmplate[pos..closingBounds.first-1], c, true))
           elif c[tagKey] == "":
             #Falsey is Truthy
-            result.add(m.render(tmplate[pos..closingBounds.first-1], c))
+            result.add(render(tmplate[pos..closingBounds.first-1], c, true))
           else:
             #Truthy is Falsey
             discard
 
         pos = closingBounds.last + 1
-        m.inSection = false
 
       else:
         substitutionImpl(escapeHTML(c[tagKey]))
@@ -373,9 +353,8 @@ when isMainModule:
 
   var c = contextFromPJsonNode(parseFile(jsonFilename))
   var tmplate = readFile(tmplateFilename)
-  var m : Mustache
 
   if outputFilename.isNil():
-    echo m.render(tmplate, c)
+    echo render(tmplate, c)
   else:
-    writeFile(outputFilename, m.render(tmplate, c))
+    writeFile(outputFilename, render(tmplate, c))
