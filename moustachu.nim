@@ -5,12 +5,12 @@ import strutils
 type
   Context* = ref ContextObj
   ContextObj = object
-    stringContext : TTable[string, string]
-    subContexts : TTable[string, Context]
-    listContexts : TTable[string, seq[Context]]
+    stringContext : Table[string, string]
+    subContexts : Table[string, Context]
+    listContexts : Table[string, seq[Context]]
     parent : Context
 
-  MoustachuParsingError = object of E_Base
+  MoustachuParsingError = object of Exception
 
 let
   openingTag = r"\{\{"
@@ -118,7 +118,7 @@ proc `[]`(c: Context; key: string): string =
       else:
         result = ""
 
-proc getContext(c: Context, key: string, foundContext: var context): bool =
+proc getContext(c: Context, key: string, foundContext: var Context): bool =
   var dotIndex = key.find(re"\.")
   if dotIndex != -1:
     var firstKey = key[0..dotIndex-1]
@@ -296,7 +296,7 @@ when isMainModule:
   import commandeer
   import json
 
-  proc contextFromValue(node: PJsonNode): Context =
+  proc contextFromValue(node: JsonNode): Context =
     result = newContext()
     case node.kind
     of JString:
@@ -313,7 +313,7 @@ when isMainModule:
       echo "should not be here"
       quit QuitFailure
 
-  proc contextFromPJsonNode(node: PJsonNode): Context =
+  proc contextFromPJsonNode(node: JsonNode): Context =
     result = newContext()
     for key, value in node.pairs():
       case value.kind

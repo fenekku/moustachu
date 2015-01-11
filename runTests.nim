@@ -5,7 +5,7 @@ import strutils
 import moustachu
 
 
-proc contextFromValue(node: PJsonNode): Context =
+proc contextFromValue(node: JsonNode): Context =
   result = newContext()
   case node.kind
   of JString:
@@ -22,7 +22,7 @@ proc contextFromValue(node: PJsonNode): Context =
     echo "should not be here"
     quit QuitFailure
 
-proc contextFromPJsonNode(node: PJsonNode): Context =
+proc contextFromPJsonNode(node: JsonNode): Context =
   result = newContext()
   for key, value in node.pairs():
     case value.kind
@@ -51,8 +51,6 @@ proc contextFromPJsonNode(node: PJsonNode): Context =
         val = map(value.elems, contextFromPJsonNode)
       result[key] = val
 
-
-var aContext : Context = newContext()
 
 for kind, fn in walkDir("specs"):
   if not fn.endsWith(".json"):

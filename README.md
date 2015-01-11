@@ -1,6 +1,6 @@
 #Moustachu
 
-Moustachu is a([N im](https://github.com/Araq/nimrod))plementation of [Mustache](https://github.com/mustache/mustache) (get it?). Mustache is "logic-less templating".
+Moustachu is a([N im](https://github.com/Araq/Nim))plementation of [Mustache](https://github.com/mustache/mustache) (get it?). Mustache is "logic-less templating".
 
 ##Usage
 
@@ -39,11 +39,11 @@ The first version will print to stdout and the second will generate a file.
 
 ##Installation
 
-The recommended way to install moustachu is through [babel](https://github.com/nim-lang/babel):
+The recommended way to install moustachu is through [nimble](https://github.com/nim-lang/nimble):
 
-Install [babel](https://github.com/nim-lang/babel). Then do:
+Install [nimble](https://github.com/nim-lang/nimble). Then do:
 
-    $ babel install moustachu
+    $ nimble install moustachu
 
 This will install the latest tagged version of moustachu.
 
@@ -60,7 +60,7 @@ Get the source code:
 
 	$ git clone https://github.com/fenekku/moustachu.git
     $ cd moustachu
-    $ nimrod c -r runTests.nim
+    $ nim c -r runTests.nim
 
 This will test against the selected specs copied from [mustache/spec](https://github.com/mustache/spec)
 
@@ -69,4 +69,3 @@ This will test against the selected specs copied from [mustache/spec](https://gi
 - Exception throwing toggle
 - Clean up some parts
 - Use to see what else to do/fix
-- Adjust for Nimrod -> Nim transition when 0.10.0 hits
