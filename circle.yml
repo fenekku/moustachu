@@ -6,20 +6,32 @@ dependencies:
     pre:
         - |
             echo ${PATH}
-            if [ ! -x ~/nim/bin/nim ]; then
+            echo "Home"
+            ls ${HOME}
+            echo "Here"
+            ls
+            if [ ! -x ${HOME}/nim/bin/nim ]; then
                 wget --quiet http://builds.nim-lang.org/download/nim-0.11.2.tar.xz
                 mkdir nim/
                 tar xf nim-0.11.2.tar.xz --directory nim/ --strip-components=1
                 cd nim/
                 ./build.sh
+                echo "Home"
+                ls ${HOME}
+                echo "Here"
+                ls
             fi
         - |
+            echo "Home"
+            ls ${HOME}
+            echo "Here"
+            ls
             if [ ! -x ${HOME}/.nimble/bin/nimble ]; then
                 git clone https://github.com/nim-lang/nimble.git
                 cd nimble
-                ls ${HOME}/nim/bin
                 nim compile --run src/nimble install
             fi
+
 
     cache_directories:
         - "${HOME}/nim/bin/"
