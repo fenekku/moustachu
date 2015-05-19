@@ -12,6 +12,7 @@ dependencies:
             ./build.sh
             cd .. && git clone https://github.com/nim-lang/nimble.git
             cd nimble
+            echo ${PATH}
             nim compile --run src/nimble install
 
 test:
