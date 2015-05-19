@@ -22,8 +22,8 @@ dependencies:
             fi
 
     cache_directories:
-        - ~/nim/bin/
-        - ~/.nimble/bin/
+        - ~/nim/
+        - ~/.nimble/
 
 test:
     pre:
