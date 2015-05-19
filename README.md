@@ -1,5 +1,7 @@
 #Moustachu
 
+[![Build Status](https://circleci.com/gh/fenekku/moustachu/tree/master.png?style=shield&circle-token=d918d8055e112fb5661e85eba92691e39d1d4d12)](https://circleci.com/gh/fenekku/moustachu)
+
 Moustachu is a([N im](https://github.com/Araq/Nim))plementation of [Mustache](https://github.com/mustache/mustache) (get it?). Mustache is "logic-less templating".
 
 ##Usage
