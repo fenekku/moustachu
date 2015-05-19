@@ -5,11 +5,6 @@ machine:
 dependencies:
     pre:
         - |
-            echo ${PATH}
-            echo "Home"
-            ls ${HOME}
-            echo "Here" `pwd`
-            ls
             if [ ! -x ${HOME}/nim/bin/nim ]; then
                 cd ${HOME}
                 wget --quiet http://builds.nim-lang.org/download/nim-0.11.2.tar.xz
@@ -19,10 +14,6 @@ dependencies:
                 ./build.sh
             fi
         - |
-            echo "Home"
-            ls ${HOME}
-            echo "Here" `pwd`
-            ls
             if [ ! -x ${HOME}/.nimble/bin/nimble ]; then
                 cd ${HOME}
                 git clone https://github.com/nim-lang/nimble.git
@@ -30,13 +21,12 @@ dependencies:
                 nim compile --run src/nimble install
             fi
 
-
     cache_directories:
         - "${HOME}/nim/bin/"
         - "${HOME}/.nimble/bin/"
 
 test:
     pre:
-        - nimble install
+        - nimble install --accept
     override:
         - nim compile --run runTests.nim
