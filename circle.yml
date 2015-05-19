@@ -1,6 +1,6 @@
 machine:
   environment:
-    PATH: ${HOME}/nim/bin:${PATH}:${HOME}/.nimble/bin
+    PATH: ${HOME}/nim/bin:${HOME}/.nimble/bin:${PATH}
 
 dependencies:
     pre:
@@ -22,8 +22,8 @@ dependencies:
             fi
 
     cache_directories:
-        - "${HOME}/nim/bin/"
-        - "${HOME}/.nimble/bin/"
+        - ~/nim/bin/
+        - ~/.nimble/bin/
 
 test:
     pre:
