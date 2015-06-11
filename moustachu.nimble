@@ -1,6 +1,6 @@
 [Package]
 name        = "moustachu"
-version     = "0.3.2"
+version     = "0.3.3"
 author      = "Guillaume Viger"
 description = "Mustache templating for Nim"
 license     = "MIT"
