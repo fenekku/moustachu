@@ -1,15 +1,17 @@
-import tables
+# import tables
 import re
 import strutils
+import json
 
 type
   ## Context used to render the templates
   Context* = ref ContextObj
   ContextObj = object
-    stringContext : Table[string, string]
-    subContexts : Table[string, Context]
-    listContexts : Table[string, seq[Context]]
-    parent : Context
+    j : JsonNode
+    # stringContext : Table[string, string]
+    # subContexts : Table[string, Context]
+    # listContexts : Table[string, seq[Context]]
+    currentContext : seq[string]
 
   #TODO allow this to be used
   MoustachuParsingError = object of Exception
@@ -27,165 +29,187 @@ let
 proc newContext*(): Context =
   ## Creates an empty Context to be filled and used for rendering
   new(result)
-  result.stringContext = initTable[string, string](4)
-  result.subContexts = initTable[string, Context](2)
-  result.listContexts = initTable[string, seq[Context]](2)
+  result.j = newJObject()
+  currentContext = @[]
+  # result.stringContext = initTable[string, string](4)
+  # result.subContexts = initTable[string, Context](2)
+  # result.listContexts = initTable[string, seq[Context]](2)
 
 proc newContext(c : Context): Context =
   ## Creates a new context from another one
   result = newContext()
-  for key, value in c.stringContext.pairs():
-    result.stringContext[key] = value
-  for key, value in c.subContexts.mpairs():
-    value.parent = result
-    result.subContexts[key] = value
-  for key, value in c.listContexts.mpairs():
-    for v in value:
-      v.parent = result
-    result.listContexts[key] = value
+  result.j = copy(c.j)
+  result.currentContext = copy(c.currentContext)
+  # for key, value in c.stringContext.pairs():
+  #   result.stringContext[key] = value
+  # for key, value in c.subContexts.mpairs():
+  #   value.parent = result
+  #   result.subContexts[key] = value
+  # for key, value in c.listContexts.mpairs():
+  #   for v in value:
+  #     v.parent = result
+  #   result.listContexts[key] = value
 
 proc `[]=`*(c: var Context; key: string, value: BiggestInt) =
   ## Assigns an int to a key in the context
-  c.stringContext[key] = $value
+  ## Convert to string immediately
+  c.j[key] = newJString($value)
 
-proc `[]=`*(c: var Context; key: string, value: string) =
+proc `[]=`*(c: var Context, key: string, value: string) =
   ## Assigns a string to a key in the context
-  c.stringContext[key] = $value
+  c.j[key] = newJString($value)
 
-proc `[]=`*(c: var Context; key: string, value: float) =
+proc `[]=`*(c: var Context, key: string, value: float) =
   ## Assigns a float to a key in the context
-  c.stringContext[key] = value.formatFloat(ffDefault, 0)
+  c.j[key] = newJString(value.formatFloat(ffDefault, 0))
 
-proc `[]=`*(c: var Context; key: string, value: bool) =
+proc `[]=`*(c: var Context, key: string, value: bool) =
   ## Assigns a bool to a key in the context
-  c.stringContext[key] = if value: "true" else: ""
+  c.j[key] = newJString(if value: "true" else: "")
 
-proc `[]=`*(c: var Context; key: string; value: var Context) =
-  ## Assigns a context to a key in the context
-  ## This builds a subcontext
-  value.parent = c
-  c.subContexts[key] = value
+proc `[]=`*(c: var Context, key: string, value: Context) =
+  ## Assigns the `value` context to `key` in the `c` context
+  ## This builds a subcontext.
+  c.j[key] = value.j
 
-proc `[]=`*(c: var Context; key: string; value: var openarray[Context]) =
+proc `[]=`*(c: var Context, key: string, value: openarray[Context]) =
   ## Assigns a list of contexts to a key in the context
   ## This creates a list
-  var contextList = newSeq[Context]()
+  var contextList = newJArray()
   for v in value:
-    v.parent = c
-    contextList.add(v)
-  c.listContexts[key] = contextList
+    contextList.elems.add(v)
+  c.j[key] = contextList
 
 proc `$`*(c: Context): string =
   ## Returns a string representing the context. Useful for debugging
-  result = "{"
-  for key, value in c.stringContext.pairs():
-    if result.len > 1: result.add(", ")
-    result.add($key)
-    result.add(": ")
-    result.add($value)
+  # result = "{"
+  # for key, value in c.stringContext.pairs():
+  #   if result.len > 1: result.add(", ")
+  #   result.add($key)
+  #   result.add(": ")
+  #   result.add($value)
 
-  for key, value in c.subContexts.pairs():
-    if result.len > 1: result.add(", ")
-    result.add($key)
-    result.add(":")
-    result.add($value)
+  # for key, value in c.subContexts.pairs():
+  #   if result.len > 1: result.add(", ")
+  #   result.add($key)
+  #   result.add(":")
+  #   result.add($value)
 
-  for key, value in c.listContexts.pairs():
-    if result.len > 1: result.add(", ")
-    result.add($key)
-    result.add(":")
-    result.add("[")
-    var subresult = ""
-    for val in value:
-      if subresult.len > 1: subresult.add(", ")
-      subresult.add($val)
-    result.add(subresult)
-    result.add("]")
+  # for key, value in c.listContexts.pairs():
+  #   if result.len > 1: result.add(", ")
+  #   result.add($key)
+  #   result.add(":")
+  #   result.add("[")
+  #   var subresult = ""
+  #   for val in value:
+  #     if subresult.len > 1: subresult.add(", ")
+  #     subresult.add($val)
+  #   result.add(subresult)
+  #   result.add("]")
 
-  result.add("}")
+  # result.add("}")
+  result = pretty(c.j) & "currentContext : " & $c.currentContext
 
-proc `[]`(c: Context; key: string): string =
+proc getInnerJson(c: Context, key : string): JObject =
+  ## Returns the inner Json associated with `relativeKey` in the context
+  ## `relativeKey` can be a nested value where each level of nesting is
+  ## delimited by a dot '.'. The key can also be a single '.' which
+  ## represents an implicit iterator i.e. parent context is a list and
+  ## '.' iterates over the current element of that list.
+  ## Returns a JNull object if the key is invalid
+  var relativeKey : seq[string] = @[]
+
+  #build the relative part
+  if key == ".":
+    # iterator element
+    relativeKey.add(key)
+  else:
+    for subKey in key.split("."):
+      relativeKey.add(subKey)
+
+  var goOn = true
+  var nestedSections = copy(c.currentSection)
+  result = c.j
+
+  while goOn:
+    #build the absolute key path as a sequence of keys
+    var absoluteKey = nestedSections & relativeKey
+
+    for subKey in absoluteKey:
+      if result.hasKey(subKey):
+        result = result[subKey]
+      else:
+        if nestedSections.len > 0:
+          discard nestedSections.pop()
+        else:
+          goOn = false
+        break
+
+    return result
+
+  return newJNull() #key is invalid
+
+
+proc `[]`(c: Context, key: string): string =
   ## Returns the string associated with the key in the context
-  ## Always interpolated at this point
   ## The key can be a nested value where each level of nesting is
   ## delimited by a dot '.'. The key can also be a single '.'' which
   ## represents an implicit iterator i.e. parent context is a list and
   ## '.' iterates over the current element of that list.
-  result = ""
-  if key == "." and c.stringContext.hasKey(key):
-    #Need to account for corner case of single . being a key
-    #or is this b/c list element
-    result = $c.stringContext[key]
-  else:
-    var dotIndex = key.find(re"\.")
-    if dotIndex != -1:
-      #unpack the nested key
-      var firstKey = key[0..dotIndex-1]
-      if c.subContexts.hasKey(firstKey):
-        #go down the hierarchy
-        var nc = c.subContexts[firstKey]
-        var p = nc.parent                       # make parent nil to
-        nc.parent = nil                         # prevent infinite loop
-        result = nc[key[dotIndex+1..key.len-1]] # in case of badly formed
-        c.subContexts[firstKey].parent = p      # template
-      elif not c.parent.isNil():
-        #go up the hierarchy
-        result = c.parent[key]
-      else:
-        #when faced with problematic situation, output the empty string
-        result = ""
-    else:
-      #not a nested key
-      if c.stringContext.hasKey(key):
-        result = $c.stringContext[key]
-      elif not c.parent.isNil():
-        result = c.parent[key]
-      else:
-        result = ""
+  ## Returns the empty string if key is invalid.
+  var jsonNode = c.getInnerJson(key)
 
-proc getContext(c: Context, key: string, foundContext: var Context): bool =
-  ## Assigns to `foundContext` the context associated to `key` in `c`.
-  ## Returns whether that context was found.
-  var dotIndex = key.find(re"\.")
-  if dotIndex != -1:
-    var firstKey = key[0..dotIndex-1]
-    if c.subContexts.hasKey(firstKey):
-      result = c.subContexts[firstKey].getContext(key[dotIndex+1..key.len-1], foundContext)
-    elif not c.parent.isNil():
-      result = c.parent.getContext(key, foundContext)
-    else:
-      #TODO toggle Exception
-      result = false
+  if jsonNode.kind == json.JString:
+    return jsonNode.str
+  elif jsonNode.kind != json.JNull:
+    return $jsonNode #return string representation of that JsonNode
   else:
-    if c.subContexts.hasKey(key):
-      foundContext = c.subContexts[key]
-      result = true
-    elif not c.parent.isNil():
-      result = c.parent.getContext(key, foundContext)
-    else:
-      #TODO toggle Exception
-      result = false
+    return ""
 
-proc getList(c: Context, key: string, foundList: var seq[Context]): bool =
-  ## Assigns to `foundList` the seq of Contexts associated to `key` in `c`.
-  ## Returns whether that seq was found.
-  var dotIndex = key.find(re"\.")
-  if dotIndex != -1:
-    var firstKey = key[0..dotIndex-1]
-    if c.subContexts.hasKey(firstKey):
-      result = c.subContexts[firstKey].getList(key[dotIndex+1..key.len-1], foundList)
-    elif not c.parent.isNil():
-      result = c.parent.getList(key, foundList)
-    else:
-      result = false
-  else:
-    if c.listContexts.hasKey(key):
-      foundList = c.listContexts[key]
-      result = true
-    elif not c.parent.isNil():
-      result = c.parent.getList(key, foundList)
-    else:
-      result = false
+
+# proc getContext(c: Context, key: string, foundContext: var Context): bool =
+#   ## Assigns to `foundContext` the context associated to `key` in `c`.
+#   ## Returns whether that context was found.
+#   var dotIndex = key.find(re"\.")
+#   if dotIndex != -1:
+#     var firstKey = key[0..dotIndex-1]
+#     if c.subContexts.hasKey(firstKey):
+#       result = c.subContexts[firstKey].getContext(key[dotIndex+1..key.len-1], foundContext)
+#     elif not c.parent.isNil():
+#       result = c.parent.getContext(key, foundContext)
+#     else:
+#       #TODO toggle Exception
+#       result = false
+#   else:
+#     if c.subContexts.hasKey(key):
+#       foundContext = c.subContexts[key]
+#       result = true
+#     elif not c.parent.isNil():
+#       result = c.parent.getContext(key, foundContext)
+#     else:
+#       #TODO toggle Exception
+#       result = false
+
+# proc getList(c: Context, key: string, foundList: var seq[Context]): bool =
+#   ## Assigns to `foundList` the seq of Contexts associated to `key` in `c`.
+#   ## Returns whether that seq was found.
+#   var dotIndex = key.find(re"\.")
+#   if dotIndex != -1:
+#     var firstKey = key[0..dotIndex-1]
+#     if c.subContexts.hasKey(firstKey):
+#       result = c.subContexts[firstKey].getList(key[dotIndex+1..key.len-1], foundList)
+#     elif not c.parent.isNil():
+#       result = c.parent.getList(key, foundList)
+#     else:
+#       result = false
+#   else:
+#     if c.listContexts.hasKey(key):
+#       foundList = c.listContexts[key]
+#       result = true
+#     elif not c.parent.isNil():
+#       result = c.parent.getList(key, foundList)
+#     else:
+#       result = false
 
 proc adjustForStandaloneIndentation(bounds: var tuple[first, last: int],
                                     pos: int, tmplate: string): void =
@@ -308,20 +332,26 @@ proc render*(tmplate: string, c: Context, inSection: bool = false): string =
 
         adjustForStandaloneIndentation(closingBounds, pos, tmplate)
 
-        var currentContext : Context
-        var currentList : seq[Context]
+        var innerJson = c.getInnerJson(tagKey)
+        # var currentContext : Context
+        # var currentList : seq[Context]
 
         if matches[0] == "#":
-          if c.getContext(tagKey, currentContext):
+          if innerJson.kind == json.JObject:
             #Render section
-            var nc = newContext(currentContext)
-            nc.parent = c
-            result.add(render(tmplate[pos..closingBounds.first-1], nc, true))
-          elif c.getList(tagKey, currentList):
+            c.currentContext.add(tagKey)
+            result.add(render(tmplate[pos..closingBounds.first-1], c, true))
+            discard c.currentContext.pop()
+          elif innerJson.kind == json.JArray:
             #Render list
-            for cil in currentList:
-              result.add(render(tmplate[pos..closingBounds.first-1], cil, true))
-          elif c[tagKey] != "":
+            var jsonContainingTagKey = c.getInnerJson("") #must be a ref
+            for jsonItem in innerJson.items():
+              #redefine the content of the tagKey
+              jsonContainingTagKey[tagKey] = jsonItem
+              result.add(render(tmplate[pos..closingBounds.first-1], c, true))
+            #redefine it back
+            jsonContainingTagKey[tagKey] = innerJson
+          elif innerJson.kind != json.JNull:
             #Truthy
             result.add(render(tmplate[pos..closingBounds.first-1], c, true))
           else:
@@ -329,13 +359,14 @@ proc render*(tmplate: string, c: Context, inSection: bool = false): string =
             discard
         else:
           # "^" is for inversion: if tagKey exists, don't render
-          if c.getContext(tagKey, currentContext):
+          if innerJson.kind == json.JObject:
             #Don't render section
             discard
-          elif c.getList(tagKey, currentList):
-            if currentList.len == 0:
+          elif innerJson.kind == json.JArray:
+            if innerJson.elems.len == 0:
+              #Empty list is Truthy
               result.add(render(tmplate[pos..closingBounds.first-1], c, true))
-          elif c[tagKey] == "":
+          elif innerJson.kind == json.JNull:
             #Falsey is Truthy
             result.add(render(tmplate[pos..closingBounds.first-1], c, true))
           else:
