@@ -2,6 +2,8 @@ import re
 import strutils
 import json
 
+echo "latest"
+
 type
   ## Context used to render a mustache template
   Context* = ref ContextObj
@@ -225,7 +227,7 @@ proc render*(tmplate: string, c: Context, inSection: bool=false): string =
   var matches : array[4, string]
   var pos = 0
   var bounds : tuple[first, last: int]
-  result = ""
+  var renderings : seq[string] = @[]
 
   if not tmplate.contains(tagRegex):
     return tmplate
@@ -236,7 +238,7 @@ proc render*(tmplate: string, c: Context, inSection: bool=false): string =
 
     if bounds.first == -1:
       #No tag
-      result.add(tmplate[pos..tmplate.len-1])
+      renderings.add(tmplate[pos..tmplate.len-1])
       pos = tmplate.len
       continue
 
@@ -250,24 +252,23 @@ proc render*(tmplate: string, c: Context, inSection: bool=false): string =
       if not inSection:
         adjustForStandaloneIndentation(bounds, pos, tmplate)
       if bounds.first > 0:
-        result.add(tmplate[pos..bounds.first-1])
+        renderings.add(tmplate[pos..bounds.first-1])
       pos = bounds.last + 1
 
     of "{", "&":
       #Triple mustache tag: do not htmlescape
       var s = c.toString(absoluteKey)
-      if bounds.first == 0:
-        result.add(s)
-      else:
-        result.add(tmplate[pos..bounds.first-1] & s)
+      if bounds.first > 0:
+        renderings.add(tmplate[pos..bounds.first-1])
+      renderings.add(s)
       pos = bounds.last + 1
 
     of "#", "^":
       #section tag
       adjustForStandaloneIndentation(bounds, pos, tmplate)
       if bounds.first > 0:
-        #immediately add text before the tag to final result
-        result.add(tmplate[pos..bounds.first-1])
+        #immediately add text before the tag to final renderings
+        renderings.add(tmplate[pos..bounds.first-1])
       pos = bounds.last + 1
 
       var closingBounds = findClosingBounds(tagKey, tmplate, pos)
@@ -277,7 +278,7 @@ proc render*(tmplate: string, c: Context, inSection: bool=false): string =
         if innerJson.kind == json.JObject:
           #Render section
           c.nestedSections.add(absoluteKey)
-          result.add(render(tmplate[pos..closingBounds.first-1], c, true))
+          renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
           discard c.nestedSections.pop()
         elif innerJson.kind == json.JArray:
           #Render list
@@ -291,16 +292,16 @@ proc render*(tmplate: string, c: Context, inSection: bool=false): string =
             #redefine the content of the tagKey
             parentJson[baseKey] = jsonItem
             c.nestedSections.add(absoluteKey)
-            result.add(render(tmplate[pos..closingBounds.first-1], c, true))
+            renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
             discard c.nestedSections.pop()
           #redefine it back
           parentJson[baseKey] = innerJson
         elif innerJson.kind == json.JBool:
           if innerJson.bval:
-            result.add(render(tmplate[pos..closingBounds.first-1], c, true))
+            renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
         elif innerJson.kind != json.JNull:
           #Truthy
-          result.add(render(tmplate[pos..closingBounds.first-1], c, true))
+          renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
         else:
           #Falsey
           discard
@@ -312,13 +313,13 @@ proc render*(tmplate: string, c: Context, inSection: bool=false): string =
         elif innerJson.kind == json.JArray:
           if innerJson.elems.len == 0:
             #Empty list is Truthy
-            result.add(render(tmplate[pos..closingBounds.first-1], c, true))
+            renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
         elif innerJson.kind == json.JNull:
           #Falsey is Truthy
-          result.add(render(tmplate[pos..closingBounds.first-1], c, true))
+          renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
         elif innerJson.kind == json.JBool:
           if not innerJson.bval:
-            result.add(render(tmplate[pos..closingBounds.first-1], c, true))
+            renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
         else:
           #Truthy is Falsey
           discard
@@ -328,11 +329,12 @@ proc render*(tmplate: string, c: Context, inSection: bool=false): string =
     else:
       #Normal substitution
       var s = parallelReplace(c.toString(absoluteKey), htmlEscapeReplace)
-      if bounds.first == 0:
-        result.add(s)
-      else:
-        result.add(tmplate[pos..bounds.first-1] & s)
+      if bounds.first > 0:
+        renderings.add(tmplate[pos..bounds.first-1])
+      renderings.add(s)
       pos = bounds.last + 1
+
+  result = join(renderings, "")
 
 
 when isMainModule:
