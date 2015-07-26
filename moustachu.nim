@@ -23,13 +23,13 @@ let
                        (re("\""),"&quot;")]
 
 proc newContext*(): Context =
-  ## Creates an empty Context to be filled and used for rendering
+  ## Create an empty Context to be filled and used for rendering
   new(result)
   result.j = newJObject()
   result.nestedSections = @[]
 
 proc newContext*(c : Context): Context =
-  ## Creates a new context from another one
+  ## Create a new context from another one
   result = newContext()
   result.j = copy(c.j)
   result.nestedSections = c.nestedSections
@@ -59,37 +59,37 @@ proc toDotIterator(node: var JsonNode) =
         discard
 
 proc newContext*(j : JsonNode): Context =
-  ## Creates a new context from a JsonNode
+  ## Create a new context from a JsonNode
   result = newContext()
   result.j = copy(j)
   result.j.toDotIterator()
 
 proc `[]=`*(c: var Context; key: string, value: BiggestInt) =
-  ## Assigns an int to a key in the context
+  ## Assign an int to a key in the context
   ## Converts to string immediately
   c.j[key] = newJString($value)
 
 proc `[]=`*(c: var Context, key: string, value: string) =
-  ## Assigns a string to a key in the context
+  ## Assign a string to a key in the context
   c.j[key] = newJString($value)
 
 proc `[]=`*(c: var Context, key: string, value: float) =
-  ## Assigns a float to a key in the context
+  ## Assign a float to a key in the context
   ## Converts to string immediately
   c.j[key] = newJString(value.formatFloat(ffDefault, 0))
 
 proc `[]=`*(c: var Context, key: string, value: bool) =
-  ## Assigns a bool to a key in the context
+  ## Assign a bool to a key in the context
   ## Converts to string immediately
   c.j[key] = newJString(if value: "true" else: "")
 
 proc `[]=`*(c: var Context, key: string, value: Context) =
-  ## Assigns the `value` context to `key` in the `c` context
+  ## Assign the `value` context to `key` in the `c` context
   ## This builds a subcontext.
   c.j[key] = value.j
 
 proc `[]=`*(c: var Context, key: string, value: openarray[Context]) =
-  ## Assigns a list of contexts to a key in the context
+  ## Assign a list of contexts to a key in the context
   ## This creates a list.
   var contextList = newJArray()
   for v in value:
@@ -97,12 +97,12 @@ proc `[]=`*(c: var Context, key: string, value: openarray[Context]) =
   c.j[key] = contextList
 
 proc `$`*(c: Context): string =
-  ## Returns a string representing the context. Useful for debugging
+  ## Return a string representing the context. Useful for debugging
   result = "j = " & pretty(c.j) & "\nnestedSections : " & $c.nestedSections
 
 proc getInnerJson(c: Context, absoluteKey: seq[string]): JsonNode =
-  ## Returns the inner Json associated with `absoluteKey` in the context
-  ## Returns a JNull object if `absoluteKey` is nil
+  ## Return the inner Json associated with `absoluteKey` in the context
+  ## Return a JNull object if `absoluteKey` is nil
   if absoluteKey.isNil():
     result = newJNull()
   else:
@@ -115,8 +115,8 @@ proc getInnerJson(c: Context, absoluteKey: seq[string]): JsonNode =
         break
 
 proc getAbsKey(c: Context, relativeKey: string): seq[string] =
-  ## Returns the seq[string] that leads to and includes this relativeKey
-  ## Returns nil if there is no such path to this key
+  ## Return the seq[string] that leads to and includes this relativeKey
+  ## Return nil if there is no such path to this key
   ## e.g. key="aa" inside section "a" returns @["a", "aa"]
   result = nil
   var keySections : seq[string]
@@ -157,8 +157,8 @@ proc getAbsKey(c: Context, relativeKey: string): seq[string] =
       result = keySections
 
 proc toString(c: Context, absoluteKey: seq[string]): string =
-  ## Returns the string associated with the key in the context.
-  ## Returns the empty string if key is invalid.
+  ## Return the string associated with the key in the context.
+  ## Return the empty string if key is invalid.
   var jsonNode = c.getInnerJson(absoluteKey)
 
   if jsonNode.kind == json.JString:
@@ -170,7 +170,7 @@ proc toString(c: Context, absoluteKey: seq[string]): string =
 
 proc adjustForStandaloneIndentation(bounds: var tuple[first, last: int],
                                     pos: int, tmplate: string): void =
-  ## Adjusts `bounds` to follow how Moustache treats whitespace
+  ## Adjust `bounds` to follow how Moustache treats whitespace
   ## TODO: Make this more readable
   var
     first = bounds.first
@@ -195,7 +195,7 @@ proc adjustForStandaloneIndentation(bounds: var tuple[first, last: int],
 
 proc findClosingBounds(tagKey: string, tmplate: string,
                        offset: int): tuple[first, last:int] =
-  ## Finds the closing tuple for `tagKey` in `tmplate` starting at
+  ## Find the closing tuple for `tagKey` in `tmplate` starting at
   ## `offset`. The returned bounds tuple is absolute (it incorporates
   ## `offset`)
   var numOpenSections = 1
@@ -217,8 +217,9 @@ proc findClosingBounds(tagKey: string, tmplate: string,
   return closingTagBounds
 
 proc render*(tmplate: string, c: Context, inSection: bool=false): string =
-  ## Takes a Moustache template `tmplate` and an evaluation context `c`
-  ## and returns the rendered string. This is the main procedure.
+  ## Take a Moustache template `tmplate` and an evaluation context `c`
+  ## and return the rendered string.
+  ## This is the main procedure.
   ## `inSection` is used to specify if the rendering is done from within
   ## a moustache section. TODO: use c information instead of `inSection`
   var matches : array[4, string]
