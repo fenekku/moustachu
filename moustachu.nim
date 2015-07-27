@@ -2,14 +2,22 @@ import re
 import strutils
 import json
 
-echo "latest"
-
 type
+  ContextKind* = enum ## possible Context types
+    CArray,
+    CObject,
+    CValue
+
   ## Context used to render a mustache template
-  Context* = ref ContextObj
+  Context = ref ContextObj
   ContextObj = object
-    j : JsonNode
-    nestedSections : seq[seq[string]]
+    case kind*: ContextKind
+    of CValue:
+      val*: JsonNode
+    of CArray:
+      elems*: seq[Context]
+    of CObject:
+      fields*: seq[tuple[key: string, val: Context]] #try
 
   #TODO allow this to be used
   MoustachuParsingError = object of Exception
@@ -24,155 +32,133 @@ let
                        (re"\\","&#92;"),
                        (re("\""),"&quot;")]
 
-proc newContext*(): Context =
-  ## Create an empty Context to be filled and used for rendering
+proc newContext*(j : JsonNode, p : Context = nil): Context =
   new(result)
-  result.j = newJObject()
-  result.nestedSections = @[]
+  case j.kind
+  of JObject:
+    result.kind = CObject
+    result.fields = @[]
+    for key, val in items(j.fields):
+      result.fields.add((key, newContext(val, result)))
+  of JArray:
+    result.kind = CArray
+    result.elems = @[]
+    for val in j.elems:
+      result.elems.add(newContext(val, result))
+  else:
+    result.kind = CValue
+    result.val = j
 
 proc newContext*(c : Context): Context =
   ## Create a new context from another one
-  result = newContext()
-  result.j = copy(c.j)
-  result.nestedSections = c.nestedSections
+  new(result)
+  case c.kind
+  of CObject:
+    result.kind = CObject
+    result.fields = c.fields
+  of CArray:
+    result.kind = CArray
+    result.elems = c.elems
+  else:
+    result.kind = CValue
+    result.val = c.val
 
-proc toDotIterator(node: var JsonNode) =
-  ## Add an intermediate JObject with key "." for JArray elements
-  ## of kind JInt, JString, JBool, JFloat
-  if node.kind == json.JObject:
-    for pair in node.mpairs():
-      case pair.val.kind
-      of json.JObject:
-        toDotIterator(pair.val)
-      of json.JArray:
-        var modifiedJsonArray : seq[JsonNode] = @[]
-        for n in pair.val.mitems():
-          case n.kind
-          of json.JFloat, json.JBool, json.JInt, json.JString:
-            var j = newJObject()
-            j["."] = n
-            modifiedJsonArray.add(j)
-          else:
-            n.toDotIterator()
+proc `[]`*(c: Context, key: string): Context =
+  ## Return the Context associated with `key`.
+  ## If the Context at `key` does not exist, return nil.
+  assert(c != nil)
+  assert(c.kind == CObject)
+  for name, item in items(c.fields):
+    if name == key:
+      return item
+  return nil
 
-        if modifiedJsonArray.len > 0:
-          pair.val.elems = modifiedJsonArray
-      else:
-        discard
-
-proc newContext*(j : JsonNode): Context =
-  ## Create a new context from a JsonNode
-  result = newContext()
-  result.j = copy(j)
-  result.j.toDotIterator()
-
-proc `[]=`*(c: var Context; key: string, value: BiggestInt) =
-  ## Assign an int to a key in the context
-  ## Converts to string immediately
-  c.j[key] = newJString($value)
-
-proc `[]=`*(c: var Context, key: string, value: string) =
-  ## Assign a string to a key in the context
-  c.j[key] = newJString($value)
-
-proc `[]=`*(c: var Context, key: string, value: float) =
-  ## Assign a float to a key in the context
-  ## Converts to string immediately
-  c.j[key] = newJString(value.formatFloat(ffDefault, 0))
-
-proc `[]=`*(c: var Context, key: string, value: bool) =
-  ## Assign a bool to a key in the context
-  ## Converts to string immediately
-  c.j[key] = newJString(if value: "true" else: "")
+# --------------- proc to build the context manually ---------------
 
 proc `[]=`*(c: var Context, key: string, value: Context) =
-  ## Assign the `value` context to `key` in the `c` context
-  ## This builds a subcontext.
-  c.j[key] = value.j
+  ## Assign a context `value` to `key` in context `c`
+  assert(c.kind == CObject)
+  var assignedContext = value
+  for i in 0..len(c.fields)-1:
+    if c.fields[i].key == key:
+      c.fields[i].val = assignedContext
+      return
+  c.fields.add((key, assignedContext))
 
-proc `[]=`*(c: var Context, key: string, value: openarray[Context]) =
-  ## Assign a list of contexts to a key in the context
-  ## This creates a list.
-  var contextList = newJArray()
-  for v in value:
-    contextList.elems.add(v.j)
-  c.j[key] = contextList
+proc merge(c1, c2: Context): Context =
+  ## Return a new Context, the result of `c1` merged with `c2`.
+  ## If `c2` is a CValue, then a pair (".", c2.val) is added to the
+  ## merged context
+  assert(c1.kind == CObject and c2.kind != CArray)
+  new(result)
+  result.kind = CObject
+  result.fields = c1.fields #this copies
+  if c2.kind == CValue:
+    result["."] = c2
+  else:
+    for key, val in items(c2.fields):
+      result[key] = val
+
+proc toString(j: JsonNode): string =
+  ## Return string representation of jsonNode `j` relevant to moustache
+  case j.kind
+  of JString:
+    return j.str
+  of JFloat:
+    return j.fnum.formatFloat(ffDefault, 0)
+  of JInt:
+    return $j.num
+  of JNull:
+    return ""
+  of JBool:
+    return if j.bval: "true" else: ""
+  else:
+    return $j
 
 proc `$`*(c: Context): string =
   ## Return a string representing the context. Useful for debugging
-  result = "j = " & pretty(c.j) & "\nnestedSections : " & $c.nestedSections
+  result = "Context->["
+  result &= "\nkind: " & $c.kind
+  case c.kind
+  of CValue: result &= "\nval: " & $c.val
+  of CArray:
+    var strArray = map(c.elems, proc(c: Context): string ="otherContext")
+    result &= "\nelems: [" & join(strArray, "") & "]"
+  of CObject:
+    var strArray : seq[string] = @[]
+    for key, val in items(c.fields):
+      strArray.add(key & ": otherContext")
+    result &= "\nfields: [" & join(strArray, ", ") & "]"
+  result &= "\n]"
 
-proc getInnerJson(c: Context, absoluteKey: seq[string]): JsonNode =
-  ## Return the inner Json associated with `absoluteKey` in the context
-  ## Return a JNull object if `absoluteKey` is nil
-  if absoluteKey.isNil():
-    result = newJNull()
-  else:
-    result = c.j
-    for subKey in absoluteKey:
-      if result.hasKey(subKey):
-        result = result[subKey]
-      else:
-        result = newJNull()
-        break
+proc resolveContext(c: Context, tagkey: string): Context =
+  ## Return the Context associated with `tagkey` where `tagkey`
+  ## can be a dotted tag e.g. a.b.c .
+  ## If the Context at `tagkey` does not exist, return nil.
+  if tagkey == ".": return c["."]
+  let subtagkeys = tagkey.split(".")
+  var currCtx = c
 
-proc getAbsKey(c: Context, relativeKey: string): seq[string] =
-  ## Return the seq[string] that leads to and includes this relativeKey
-  ## Return nil if there is no such path to this key
-  ## e.g. key="aa" inside section "a" returns @["a", "aa"]
-  result = nil
-  var keySections : seq[string]
-  if relativeKey == ".":
-    keySections = @["."]
-  else:
-    keySections = relativeKey.split(".")
+  for subtagkey in subtagkeys:
+    currCtx = currCtx[subtagkey]
+    if currCtx == nil:
+      break
 
-  var keyFound = false
+  return currCtx
 
-  if c.nestedSections.len > 0:
-    for i in countdown(c.nestedSections.high, c.nestedSections.low):
-      var j = c.j
-      var inThisSection = true
-      for subKey in c.nestedSections[i]:
-        j = j[subKey]
-      for subKey in keySections:
-        if j.hasKey(subKey):
-          j = j[subKey]
-        else:
-          inThisSection = false
-          break
-      if inThisSection:
-        keyFound = true
-        result = c.nestedSections[i] & keySections
-        break
-
-  if not keyFound:
-    var j = c.j
-    keyFound = true
-    for subKey in keySections:
-      if j.hasKey(subKey):
-        j = j[subKey]
-      else:
-        keyFound = false
-        break
-    if keyFound:
-      result = keySections
-
-proc toString(c: Context, absoluteKey: seq[string]): string =
-  ## Return the string associated with the key in the context.
-  ## Return the empty string if key is invalid.
-  var jsonNode = c.getInnerJson(absoluteKey)
-
-  if jsonNode.kind == json.JString:
-    return jsonNode.str
-  elif jsonNode.kind != json.JNull:
-    return $jsonNode
-  else:
-    return ""
+proc resolveString(c: Context, tagkey: string): string =
+  ## Return the string associted with `tagkey` in context `c`.
+  ## If the Context at `tagkey` does not exist, return the empty string.
+  let currCtx = c.resolveContext(tagkey)
+  if currCtx != nil:
+    if currCtx.kind == CValue:
+      return currCtx.val.toString()
+    else: return $currCtx
+  else: return ""
 
 proc adjustForStandaloneIndentation(bounds: var tuple[first, last: int],
                                     pos: int, tmplate: string): void =
-  ## Adjust `bounds` to follow how Moustache treats whitespace
+  ## Adjust `bounds` to follow how Moustache treats whitespace.
   ## TODO: Make this more readable
   var
     first = bounds.first
@@ -198,8 +184,7 @@ proc adjustForStandaloneIndentation(bounds: var tuple[first, last: int],
 proc findClosingBounds(tagKey: string, tmplate: string,
                        offset: int): tuple[first, last:int] =
   ## Find the closing tuple for `tagKey` in `tmplate` starting at
-  ## `offset`. The returned bounds tuple is absolute (it incorporates
-  ## `offset`)
+  ## `offset`.
   var numOpenSections = 1
   var matches : array[1, string]
   let openingOrClosingTagRegex = re(openingTag & r"(\#|\^|/)\s*" &
@@ -220,8 +205,7 @@ proc findClosingBounds(tagKey: string, tmplate: string,
 
 proc render*(tmplate: string, c: Context, inSection: bool=false): string =
   ## Take a Moustache template `tmplate` and an evaluation context `c`
-  ## and return the rendered string.
-  ## This is the main procedure.
+  ## and return the rendered string. This is the main procedure.
   ## `inSection` is used to specify if the rendering is done from within
   ## a moustache section. TODO: use c information instead of `inSection`
   var matches : array[4, string]
@@ -243,8 +227,6 @@ proc render*(tmplate: string, c: Context, inSection: bool=false): string =
       continue
 
     var tagKey = matches[1].strip()
-    var absoluteKey = getAbsKey(c, tagKey)
-    var innerJson = c.getInnerJson(absoluteKey)
 
     case matches[0]
     of "!":
@@ -257,81 +239,76 @@ proc render*(tmplate: string, c: Context, inSection: bool=false): string =
 
     of "{", "&":
       #Triple mustache tag: do not htmlescape
-      var s = c.toString(absoluteKey)
       if bounds.first > 0:
         renderings.add(tmplate[pos..bounds.first-1])
-      renderings.add(s)
+      renderings.add(c.resolveString(tagKey))
       pos = bounds.last + 1
 
     of "#", "^":
       #section tag
       adjustForStandaloneIndentation(bounds, pos, tmplate)
       if bounds.first > 0:
-        #immediately add text before the tag to final renderings
+        #immediately add text before the tag
         renderings.add(tmplate[pos..bounds.first-1])
       pos = bounds.last + 1
 
       var closingBounds = findClosingBounds(tagKey, tmplate, pos)
       adjustForStandaloneIndentation(closingBounds, pos, tmplate)
 
-      if matches[0] == "#":
-        if innerJson.kind == json.JObject:
-          #Render section
-          c.nestedSections.add(absoluteKey)
-          renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
-          discard c.nestedSections.pop()
-        elif innerJson.kind == json.JArray:
-          #Render list
-          var parentKey : seq[string]
-          if absoluteKey.len > 1: parentKey = absoluteKey[0..^2]
-          else: parentKey = @[]
-          var parentJson = c.getInnerJson(parentKey) #is a ref
-          var baseKey = absoluteKey[^1]
+      var ctx = c.resolveContext(tagkey)
 
-          for jsonItem in innerJson.items():
-            #redefine the content of the tagKey
-            parentJson[baseKey] = jsonItem
-            c.nestedSections.add(absoluteKey)
+      if matches[0] == "#" and ctx != nil:
+        case ctx.kind
+        of CObject:
+          #Render section
+          ctx = merge(c, ctx)
+          renderings.add(render(tmplate[pos..closingBounds.first-1], ctx, true))
+        of CArray:
+          #Render list
+          for ctxItem in ctx.elems:
+            if ctxItem.kind != CArray:
+              ctx = merge(c, ctxItem)
+            else:
+              ctx = c
+            renderings.add(render(tmplate[pos..closingBounds.first-1], ctx, true))
+        of CValue:
+          case ctx.val.kind
+          of JBool:
+            if ctx.val.bval:
+              renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
+          of JNull:
+            discard #do nothing
+          else:
             renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
-            discard c.nestedSections.pop()
-          #redefine it back
-          parentJson[baseKey] = innerJson
-        elif innerJson.kind == json.JBool:
-          if innerJson.bval:
-            renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
-        elif innerJson.kind != json.JNull:
-          #Truthy
-          renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
-        else:
-          #Falsey
-          discard
-      else:
+      elif matches[0] == "^":
         # "^" is for inversion: if tagKey exists, don't render
-        if innerJson.kind == json.JObject:
-          #Don't render section
-          discard
-        elif innerJson.kind == json.JArray:
-          if innerJson.elems.len == 0:
-            #Empty list is Truthy
-            renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
-        elif innerJson.kind == json.JNull:
-          #Falsey is Truthy
+        if ctx == nil:
           renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
-        elif innerJson.kind == json.JBool:
-          if not innerJson.bval:
-            renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
         else:
-          #Truthy is Falsey
-          discard
+          case ctx.kind
+          of CObject:
+            discard #Don't render section
+          of CArray:
+            if len(ctx.elems) == 0:
+              #Empty list is Truthy
+              renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
+          of CValue:
+            case ctx.val.kind
+            of JBool:
+              if not ctx.val.bval:
+                renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
+            of JNull:
+              renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
+            else:
+              discard #Don't render section
 
       pos = closingBounds.last + 1
 
     else:
       #Normal substitution
-      var s = parallelReplace(c.toString(absoluteKey), htmlEscapeReplace)
       if bounds.first > 0:
         renderings.add(tmplate[pos..bounds.first-1])
-      renderings.add(s)
+      renderings.add(parallelReplace(c.resolveString(tagKey), htmlEscapeReplace))
       pos = bounds.last + 1
 
   result = join(renderings, "")
