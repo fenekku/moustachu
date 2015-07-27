@@ -1,3 +1,6 @@
+
+## A moustache templating engine written in Nim.
+
 import re
 import strutils
 import json
@@ -9,7 +12,7 @@ type
     CValue
 
   ## Context used to render a mustache template
-  Context = ref ContextObj
+  Context* = ref ContextObj
   ContextObj = object
     case kind*: ContextKind
     of CValue:
@@ -17,10 +20,7 @@ type
     of CArray:
       elems*: seq[Context]
     of CObject:
-      fields*: seq[tuple[key: string, val: Context]] #try
-
-  #TODO allow this to be used
-  MoustachuParsingError = object of Exception
+      fields*: seq[tuple[key: string, val: Context]]
 
 let
   openingTag = r"\{\{"
@@ -32,36 +32,33 @@ let
                        (re"\\","&#92;"),
                        (re("\""),"&quot;")]
 
-proc newContext*(j : JsonNode, p : Context = nil): Context =
+proc newContext*(j : JsonNode = nil): Context =
+  ## Create a new Context based on a JsonNode object
   new(result)
-  case j.kind
-  of JObject:
+  if j == nil:
     result.kind = CObject
     result.fields = @[]
-    for key, val in items(j.fields):
-      result.fields.add((key, newContext(val, result)))
-  of JArray:
-    result.kind = CArray
-    result.elems = @[]
-    for val in j.elems:
-      result.elems.add(newContext(val, result))
   else:
-    result.kind = CValue
-    result.val = j
+    case j.kind
+    of JObject:
+      result.kind = CObject
+      result.fields = @[]
+      for key, val in items(j.fields):
+        result.fields.add((key, newContext(val)))
+    of JArray:
+      result.kind = CArray
+      result.elems = @[]
+      for val in j.elems:
+        result.elems.add(newContext(val))
+    else:
+      result.kind = CValue
+      result.val = j
 
-proc newContext*(c : Context): Context =
-  ## Create a new context from another one
+proc newArrayContext*(): Context =
+  ## Create a new Context of kind CArray
   new(result)
-  case c.kind
-  of CObject:
-    result.kind = CObject
-    result.fields = c.fields
-  of CArray:
-    result.kind = CArray
-    result.elems = c.elems
-  else:
-    result.kind = CValue
-    result.val = c.val
+  result.kind = CArray
+  result.elems = @[]
 
 proc `[]`*(c: Context, key: string): Context =
   ## Return the Context associated with `key`.
@@ -73,17 +70,45 @@ proc `[]`*(c: Context, key: string): Context =
       return item
   return nil
 
-# --------------- proc to build the context manually ---------------
-
+# -------------- proc to manually build a Context ----------------
 proc `[]=`*(c: var Context, key: string, value: Context) =
   ## Assign a context `value` to `key` in context `c`
   assert(c.kind == CObject)
-  var assignedContext = value
   for i in 0..len(c.fields)-1:
     if c.fields[i].key == key:
-      c.fields[i].val = assignedContext
+      c.fields[i].val = value
       return
-  c.fields.add((key, assignedContext))
+  c.fields.add((key, value))
+
+proc `[]=`*(c: var Context; key: string, value: BiggestInt) =
+  ## Assign `value` to `key` in Context `c`
+  assert(c.kind == CObject)
+  c[key] = newContext(newJInt(value))
+
+proc `[]=`*(c: var Context; key: string, value: string) =
+  ## Assign `value` to `key` in Context `c`
+  assert(c.kind == CObject)
+  c[key] = newContext(newJString(value))
+
+proc `[]=`*(c: var Context; key: string, value: float) =
+  ## Assign `value` to `key` in Context `c`
+  assert(c.kind == CObject)
+  c[key] = newContext(newJFloat(value))
+
+proc `[]=`*(c: var Context; key: string, value: bool) =
+  ## Assign `value` to `key` in Context `c`
+  assert(c.kind == CObject)
+  c[key] = newContext(newJBool(value))
+
+proc `[]=`*(c: var Context, key: string, value: openarray[Context]) =
+  ## Assign `value` to `key` in Context `c`
+  assert(c.kind == CObject)
+  var contextList = newArrayContext()
+  for v in value:
+    contextList.elems.add(value)
+  c[key] = contextList
+
+# -----------------------------------------------------------------
 
 proc merge(c1, c2: Context): Context =
   ## Return a new Context, the result of `c1` merged with `c2`.
@@ -98,22 +123,6 @@ proc merge(c1, c2: Context): Context =
   else:
     for key, val in items(c2.fields):
       result[key] = val
-
-proc toString(j: JsonNode): string =
-  ## Return string representation of jsonNode `j` relevant to moustache
-  case j.kind
-  of JString:
-    return j.str
-  of JFloat:
-    return j.fnum.formatFloat(ffDefault, 0)
-  of JInt:
-    return $j.num
-  of JNull:
-    return ""
-  of JBool:
-    return if j.bval: "true" else: ""
-  else:
-    return $j
 
 proc `$`*(c: Context): string =
   ## Return a string representing the context. Useful for debugging
@@ -146,8 +155,24 @@ proc resolveContext(c: Context, tagkey: string): Context =
 
   return currCtx
 
+proc toString(j: JsonNode): string =
+  ## Return string representation of jsonNode `j` relevant to moustache
+  case j.kind
+  of JString:
+    return j.str
+  of JFloat:
+    return j.fnum.formatFloat(ffDefault, 0)
+  of JInt:
+    return $j.num
+  of JNull:
+    return ""
+  of JBool:
+    return if j.bval: "true" else: ""
+  else:
+    return $j
+
 proc resolveString(c: Context, tagkey: string): string =
-  ## Return the string associted with `tagkey` in context `c`.
+  ## Return the string associated with `tagkey` in Context `c`.
   ## If the Context at `tagkey` does not exist, return the empty string.
   let currCtx = c.resolveContext(tagkey)
   if currCtx != nil:
@@ -159,7 +184,7 @@ proc resolveString(c: Context, tagkey: string): string =
 proc adjustForStandaloneIndentation(bounds: var tuple[first, last: int],
                                     pos: int, tmplate: string): void =
   ## Adjust `bounds` to follow how Moustache treats whitespace.
-  ## TODO: Make this more readable
+  ## TODO: See if there is a nicer way to do this
   var
     first = bounds.first
     last = bounds.last
@@ -183,8 +208,7 @@ proc adjustForStandaloneIndentation(bounds: var tuple[first, last: int],
 
 proc findClosingBounds(tagKey: string, tmplate: string,
                        offset: int): tuple[first, last:int] =
-  ## Find the closing tuple for `tagKey` in `tmplate` starting at
-  ## `offset`.
+  ## Find the closing location for `tagKey` in `tmplate` given `offset`.
   var numOpenSections = 1
   var matches : array[1, string]
   let openingOrClosingTagRegex = re(openingTag & r"(\#|\^|/)\s*" &
@@ -204,10 +228,10 @@ proc findClosingBounds(tagKey: string, tmplate: string,
   return closingTagBounds
 
 proc render*(tmplate: string, c: Context, inSection: bool=false): string =
-  ## Take a Moustache template `tmplate` and an evaluation context `c`
+  ## Take a Moustache template `tmplate` and an evaluation Context `c`
   ## and return the rendered string. This is the main procedure.
   ## `inSection` is used to specify if the rendering is done from within
-  ## a moustache section. TODO: use c information instead of `inSection`
+  ## a moustache section.
   var matches : array[4, string]
   var pos = 0
   var bounds : tuple[first, last: int]
@@ -280,8 +304,9 @@ proc render*(tmplate: string, c: Context, inSection: bool=false): string =
             discard #do nothing
           else:
             renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
+
       elif matches[0] == "^":
-        # "^" is for inversion: if tagKey exists, don't render
+        # "^" is for inversion: if Context exists, don't render
         if ctx == nil:
           renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
         else:

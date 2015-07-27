@@ -69,5 +69,4 @@ This will test against the selected specs copied from [mustache/spec](https://gi
 ##TODO
 
 - Exception throwing toggle
-- Clean up some parts
 - Use to see what else to do/fix
