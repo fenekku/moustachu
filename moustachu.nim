@@ -1,5 +1,5 @@
 
-## A moustache templating engine written in Nim.
+## A mustache templating engine written in Nim.
 
 import re
 import strutils
@@ -23,14 +23,14 @@ type
       fields*: seq[tuple[key: string, val: Context]]
 
 let
-  openingTag = r"\{\{"
-  closingTag = r"\}\}"
-  tagRegex = re(openingTag & r"(\#|&|\^|!|\{)?((.|\s)+?)(\})?" & closingTag)
-  htmlEscapeReplace = [(re"&","&amp;"),
-                       (re"<","&lt;"),
-                       (re">","&gt;"),
-                       (re"\\","&#92;"),
-                       (re("\""),"&quot;")]
+  tagOpening = r"\{\{"
+  tagClosing = r"\}\}"
+  tagRegex = re(tagOpening & r"(\#|&|\^|!|\{|/)?((?:.|\s)+?)\}?" & tagClosing)
+  htmlEscapeReplace = [(re"&", "&amp;"),
+                       (re"<", "&lt;"),
+                       (re">", "&gt;"),
+                       (re"\\", "&#92;"),
+                       (re("\""), "&quot;")]
 
 proc newContext*(j : JsonNode = nil): Context =
   ## Create a new Context based on a JsonNode object
@@ -64,7 +64,7 @@ proc `[]`*(c: Context, key: string): Context =
   ## Return the Context associated with `key`.
   ## If the Context at `key` does not exist, return nil.
   assert(c != nil)
-  assert(c.kind == CObject)
+  if c.kind != CObject: return nil
   for name, item in items(c.fields):
     if name == key:
       return item
@@ -110,20 +110,6 @@ proc `[]=`*(c: var Context, key: string, value: openarray[Context]) =
 
 # -----------------------------------------------------------------
 
-proc merge(c1, c2: Context): Context =
-  ## Return a new Context, the result of `c1` merged with `c2`.
-  ## If `c2` is a CValue, then a pair (".", c2.val) is added to the
-  ## merged context
-  assert(c1.kind == CObject and c2.kind != CArray)
-  new(result)
-  result.kind = CObject
-  result.fields = c1.fields #this copies
-  if c2.kind == CValue:
-    result["."] = c2
-  else:
-    for key, val in items(c2.fields):
-      result[key] = val
-
 proc `$`*(c: Context): string =
   ## Return a string representing the context. Useful for debugging
   result = "Context->["
@@ -132,7 +118,7 @@ proc `$`*(c: Context): string =
   of CValue: result &= "\nval: " & $c.val
   of CArray:
     var strArray = map(c.elems, proc(c: Context): string ="otherContext")
-    result &= "\nelems: [" & join(strArray, "") & "]"
+    result &= "\nelems: [" & join(strArray, ", ") & "]"
   of CObject:
     var strArray : seq[string] = @[]
     for key, val in items(c.fields):
@@ -140,23 +126,28 @@ proc `$`*(c: Context): string =
     result &= "\nfields: [" & join(strArray, ", ") & "]"
   result &= "\n]"
 
-proc resolveContext(c: Context, tagkey: string): Context =
+proc resolveContext(contextStack: seq[Context], tagkey: string): Context =
   ## Return the Context associated with `tagkey` where `tagkey`
   ## can be a dotted tag e.g. a.b.c .
   ## If the Context at `tagkey` does not exist, return nil.
-  if tagkey == ".": return c["."]
+  var currCtx = contextStack[contextStack.high]
+  if tagkey == ".": return currCtx
   let subtagkeys = tagkey.split(".")
-  var currCtx = c
+  for i in countDown(contextStack.high, contextStack.low):
+    currCtx = contextStack[i]
 
-  for subtagkey in subtagkeys:
-    currCtx = currCtx[subtagkey]
-    if currCtx == nil:
-      break
+    for subtagkey in subtagkeys:
+      currCtx = currCtx[subtagkey]
+      if currCtx == nil:
+        break
+
+    if currCtx != nil:
+      return currCtx
 
   return currCtx
 
 proc toString(j: JsonNode): string =
-  ## Return string representation of jsonNode `j` relevant to moustache
+  ## Return string representation of jsonNode `j` relevant to mustache
   case j.kind
   of JString:
     return j.str
@@ -171,10 +162,10 @@ proc toString(j: JsonNode): string =
   else:
     return $j
 
-proc resolveString(c: Context, tagkey: string): string =
+proc resolveString(contextStack: seq[Context], tagkey: string): string =
   ## Return the string associated with `tagkey` in Context `c`.
   ## If the Context at `tagkey` does not exist, return the empty string.
-  let currCtx = c.resolveContext(tagkey)
+  let currCtx = resolveContext(contextStack, tagkey)
   if currCtx != nil:
     if currCtx.kind == CValue:
       return currCtx.val.toString()
@@ -182,38 +173,46 @@ proc resolveString(c: Context, tagkey: string): string =
   else: return ""
 
 proc adjustForStandaloneIndentation(bounds: var tuple[first, last: int],
-                                    pos: int, tmplate: string): void =
-  ## Adjust `bounds` to follow how Moustache treats whitespace.
-  ## TODO: See if there is a nicer way to do this
-  var
-    first = bounds.first
-    last = bounds.last
+                                    tmplate: string) =
+  ## Adjust `bounds` to follow how mustache treats whitespace.
+  var first = bounds.first
+  var index = bounds.first - 1
 
-  while first-1 >= pos and tmplate[first-1] in Whitespace-NewLines:
-    dec(first)
-  while last+1 <= tmplate.len-1 and tmplate[last+1] in Whitespace-NewLines:
-    inc(last)
-  if last < tmplate.len-1:
-    inc(last)
+  #Check if the left side is empty
+  var ls_empty = false
+  while index > -1 and tmplate[index] in {' ', '\t'}: dec(index)
+  if index == -1:
+    first = 0
+    ls_empty = true
+  elif tmplate[index] == '\l':
+    first = index + 1
+    ls_empty = true
 
-  #Need to account for \r\n
-  #would be nice to be able to do this prettily
-  if last+1 <= tmplate.len-1 and tmplate[last] == '\x0D' and tmplate[last+1] == '\x0A':
-    inc(last)
-
-  if ((first == 0) or (first > 0 and tmplate[first-1] in NewLines)) and
-     ((last == tmplate.len-1) or (last < tmplate.len-1 and tmplate[last] in NewLines)):
-    bounds.first = first
-    bounds.last = last
+  #Check if the right side is empty
+  if ls_empty:
+    index = bounds.last + 1
+    while index < tmplate.len and tmplate[index] in {' ', '\t'}: inc(index)
+    if index == tmplate.len:
+      bounds.first = first
+      bounds.last = index - 1
+    elif tmplate[index] == '\c':
+      if tmplate[index+1] == '\l':
+        inc(index)
+      bounds.first = first
+      bounds.last = index
+    elif tmplate[index] == '\l':
+      bounds.first = first
+      bounds.last = index
 
 proc findClosingBounds(tagKey: string, tmplate: string,
                        offset: int): tuple[first, last:int] =
   ## Find the closing location for `tagKey` in `tmplate` given `offset`.
   var numOpenSections = 1
   var matches : array[1, string]
-  let openingOrClosingTagRegex = re(openingTag & r"(\#|\^|/)\s*" &
-                                    tagKey & r"\s*" & closingTag)
-  var closingTagBounds : tuple[first: int, last: int]
+  #TODO: take this out
+  let openingOrClosingTagRegex = re(tagOpening & r"(\#|\^|/)\s*" &
+                                    tagKey & r"\s*" & tagClosing)
+  var closingTagBounds : tuple[first, last: int]
   var pos = offset
 
   while numOpenSections != 0:
@@ -227,114 +226,149 @@ proc findClosingBounds(tagKey: string, tmplate: string,
 
   return closingTagBounds
 
-proc render*(tmplate: string, c: Context, inSection: bool=false): string =
-  ## Take a Moustache template `tmplate` and an evaluation Context `c`
+proc render*(tmplate: string, c: Context): string =
+  ## Take a mustache template `tmplate` and an evaluation Context `c`
   ## and return the rendered string. This is the main procedure.
-  ## `inSection` is used to specify if the rendering is done from within
-  ## a moustache section.
-  var matches : array[4, string]
-  var pos = 0
-  var bounds : tuple[first, last: int]
+  var matches : array[2, string]
   var renderings : seq[string] = @[]
+  var sections : seq[string] = @[]
+  var contexts : seq[Context] = @[]
+  #TODO: join those two together
+  var loopCounters : seq[int] = @[]
+  var loopPositions : seq[int] = @[]
 
-  if not tmplate.contains(tagRegex):
-    return tmplate
+  var pos = 0
 
-  while pos != tmplate.len:
+  var tag = (bounds: (first: -1, last:0), key: "", symbol: "")
+
+  contexts.add(c)
+
+  while pos < tmplate.len:
     #Find a tag
-    bounds = tmplate.findBounds(tagRegex, matches, start=pos)
+    tag.bounds = tmplate.findBounds(tagRegex, matches, start=pos)
+    tag.symbol = matches[0]
+    tag.key = if matches[1] != nil: matches[1].strip() else: matches[1]
 
-    if bounds.first == -1:
-      #No tag
+    #No tag
+    if tag.bounds.first == -1:
       renderings.add(tmplate[pos..tmplate.len-1])
       pos = tmplate.len
       continue
 
-    var tagKey = matches[1].strip()
+    # A tag
+    if tag.symbol in @["!", "#", "^", "/"]:
+      # potentially standalone tag
+      adjustForStandaloneIndentation(tag.bounds, tmplate)
 
-    case matches[0]
+    # output raw text before tag
+    if tag.bounds.first > 0:
+      renderings.add(tmplate[pos..tag.bounds.first-1])
+
+    pos = tag.bounds.last + 1
+
+    case tag.symbol
     of "!":
-      #Comments tag
-      if not inSection:
-        adjustForStandaloneIndentation(bounds, pos, tmplate)
-      if bounds.first > 0:
-        renderings.add(tmplate[pos..bounds.first-1])
-      pos = bounds.last + 1
+      # Comment
+      continue
 
     of "{", "&":
-      #Triple mustache tag: do not htmlescape
-      if bounds.first > 0:
-        renderings.add(tmplate[pos..bounds.first-1])
-      renderings.add(c.resolveString(tagKey))
-      pos = bounds.last + 1
+      # Triple mustache tag: do not htmlescape
+      renderings.add(resolveString(contexts, tag.key))
 
     of "#", "^":
-      #section tag
-      adjustForStandaloneIndentation(bounds, pos, tmplate)
-      if bounds.first > 0:
-        #immediately add text before the tag
-        renderings.add(tmplate[pos..bounds.first-1])
-      pos = bounds.last + 1
+      # Section tag
+      var ctx = resolveContext(contexts, tag.key)
 
-      var closingBounds = findClosingBounds(tagKey, tmplate, pos)
-      adjustForStandaloneIndentation(closingBounds, pos, tmplate)
+      if tag.symbol == "#":
+        # Context or list
+        if ctx == nil:
+          var closingBounds = findClosingBounds(tag.key, tmplate, pos)
+          pos = closingBounds.last+1
 
-      var ctx = c.resolveContext(tagkey)
+        elif ctx.kind == CObject:
+          # enter a new section
+          contexts.add(ctx)
+          sections.add(tag.key)
 
-      if matches[0] == "#" and ctx != nil:
-        case ctx.kind
-        of CObject:
-          #Render section
-          ctx = merge(c, ctx)
-          renderings.add(render(tmplate[pos..closingBounds.first-1], ctx, true))
-        of CArray:
-          #Render list
-          for ctxItem in ctx.elems:
-            if ctxItem.kind != CArray:
-              ctx = merge(c, ctxItem)
-            else:
-              ctx = c
-            renderings.add(render(tmplate[pos..closingBounds.first-1], ctx, true))
-        of CValue:
+        elif ctx.kind == CArray:
+          # update the array loop stacks
+          if ctx.elems.len > 0:
+            loopCounters.add(ctx.elems.len)
+            loopPositions.add(tag.bounds.last + 1)
+            sections.add(tag.key)
+            contexts.add(ctx.elems[ctx.elems.len - loopCounters[^1]])
+          else:
+            var closingBounds = findClosingBounds(tag.key, tmplate, pos)
+            pos = closingBounds.last+1
+
+        elif ctx.kind == CValue:
           case ctx.val.kind
           of JBool:
-            if ctx.val.bval:
-              renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
+            if not ctx.val.bval:
+              var closingBounds = findClosingBounds(tag.key, tmplate, pos)
+              pos = closingBounds.last+1
           of JNull:
-            discard #do nothing
-          else:
-            renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
+            var closingBounds = findClosingBounds(tag.key, tmplate, pos)
+            pos = closingBounds.last+1
+          else: discard #we will render the text inside the section
 
-      elif matches[0] == "^":
-        # "^" is for inversion: if Context exists, don't render
-        if ctx == nil:
-          renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
-        else:
+      elif tag.symbol == "^":
+        # "^" is for inversion:
+        # if Context exists, don't render
+        # if Context does not exist, render
+        if ctx != nil:
           case ctx.kind
           of CObject:
-            discard #Don't render section
+            var closingBounds = findClosingBounds(tag.key, tmplate, pos)
+            pos = closingBounds.last+1
           of CArray:
-            if len(ctx.elems) == 0:
-              #Empty list is Truthy
-              renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
+            if len(ctx.elems) != 0:
+              # Non-empty list is falsy
+              var closingBounds = findClosingBounds(tag.key, tmplate, pos)
+              pos = closingBounds.last+1
           of CValue:
             case ctx.val.kind
             of JBool:
-              if not ctx.val.bval:
-                renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
-            of JNull:
-              renderings.add(render(tmplate[pos..closingBounds.first-1], c, true))
+              if ctx.val.bval:
+                var closingBounds = findClosingBounds(tag.key, tmplate, pos)
+                pos = closingBounds.last+1
+            of JNull: discard #we will render the text inside the section
             else:
-              discard #Don't render section
+              var closingBounds = findClosingBounds(tag.key, tmplate, pos)
+              pos = closingBounds.last+1
 
-      pos = closingBounds.last + 1
+    of "/":
+      # Closing section tag
+      var ctx = resolveContext(contexts, tag.key)
+
+      if ctx != nil:
+        # account for empty inverted section
+        if ctx.kind == CObject:
+          if sections[^1] == tag.key:
+            discard contexts.pop()
+            discard sections.pop()
+
+        elif ctx.kind == CArray:
+          if loopCounters.len == 0:
+            # if closing an inverted section
+            continue
+
+          dec(loopCounters[^1])
+
+          if loopCounters[^1] == 0:
+            discard contexts.pop()
+            discard sections.pop()
+            discard loopCounters.pop()
+            discard loopPositions.pop()
+          else:
+            discard contexts.pop()
+            contexts.add(ctx.elems[ctx.elems.len - loopCounters[^1]])
+            pos = loopPositions[^1]
 
     else:
       #Normal substitution
-      if bounds.first > 0:
-        renderings.add(tmplate[pos..bounds.first-1])
-      renderings.add(parallelReplace(c.resolveString(tagKey), htmlEscapeReplace))
-      pos = bounds.last + 1
+      renderings.add(parallelReplace(resolveString(contexts, tag.key),
+                                     htmlEscapeReplace))
 
   result = join(renderings, "")
 
@@ -343,7 +377,7 @@ when isMainModule:
   import commandeer
 
   proc usage(): string =
-    result = "Usage: moustachu <context>.json <template>.moustache [--file=<outputFilename>]"
+    result = "Usage: moustachu <context>.json <template>.mustache [--file=<outputFilename>]"
 
   commandline:
     argument jsonFilename, string

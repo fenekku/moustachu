@@ -23,6 +23,7 @@ for kind, fn in walkDir("specs"):
       echo "Test '", jn["name"].str, "' failed."
       echo "Template: ", escape(jn["template"].str)
       echo "Template: ", jn["template"].str
+      echo "data: ", jn["data"]
       echo "Context: ", aContext
       echo "Render: ", escape(render(jn["template"].str, aContext))
       echo "Expected: ", escape(jn["expected"].str)

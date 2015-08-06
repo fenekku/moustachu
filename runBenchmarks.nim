@@ -52,3 +52,4 @@ echo "Avg context creation and render time (s): ", t / 2000.0
 
 # 0.07263176703453064s nested sections
 # 0.0699 merge
+# 0.066979 no recursion

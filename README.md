@@ -68,5 +68,7 @@ This will test against the selected specs copied from [mustache/spec](https://gi
 
 ##TODO
 
+- assumes well-formed template: remove that assumption
+- little code refactorings
 - Exception throwing toggle
 - Use to see what else to do/fix
