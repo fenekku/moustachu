@@ -1,10 +1,11 @@
 
 ## A mustache templating engine written in Nim.
 
-import re
+import json
+import options
+import nre
 import sequtils
 import strutils
-import json
 
 type
   ContextKind* = enum ## possible Context types
@@ -173,11 +174,10 @@ proc resolveString(contextStack: seq[Context], tagkey: string): string =
     else: return $currCtx
   else: return ""
 
-proc adjustForStandaloneIndentation(bounds: var tuple[first, last: int],
-                                    tmplate: string) =
+proc adjustForStandaloneIndentation(bounds: var Slice[int], tmplate: string) =
   ## Adjust `bounds` to follow how mustache treats whitespace.
-  var first = bounds.first
-  var index = bounds.first - 1
+  var first = bounds.a
+  var index = bounds.a - 1
 
   #Check if the left side is empty
   var ls_empty = false
@@ -191,70 +191,96 @@ proc adjustForStandaloneIndentation(bounds: var tuple[first, last: int],
 
   #Check if the right side is empty
   if ls_empty:
-    index = bounds.last + 1
+    index = bounds.b + 1
     while index < tmplate.len and tmplate[index] in {' ', '\t'}: inc(index)
     if index == tmplate.len:
-      bounds.first = first
-      bounds.last = index - 1
+      bounds.a = first
+      bounds.b = index - 1
     elif tmplate[index] == '\c':
       if tmplate[index+1] == '\l':
         inc(index)
-      bounds.first = first
-      bounds.last = index
+      bounds.a = first
+      bounds.b = index
     elif tmplate[index] == '\l':
-      bounds.first = first
-      bounds.last = index
+      bounds.a = first
+      bounds.b = index
 
-proc findClosingBounds(tagKey: string, tmplate: string,
-                       offset: int): tuple[first, last:int] =
+proc findClosingBounds(tmplate: string, tagKey: string,
+                       offset: int): Slice[int] =
   ## Find the closing location for `tagKey` in `tmplate` given `offset`.
   var numOpenSections = 1
-  var matches : array[1, string]
-  #TODO: take this out
   let openingOrClosingTagRegex = re(tagOpening & r"(\#|\^|/)\s*" &
                                     tagKey & r"\s*" & tagClosing)
-  var closingTagBounds : tuple[first, last: int]
   var pos = offset
 
   while numOpenSections != 0:
-    closingTagBounds = tmplate.findBounds(openingOrClosingTagRegex,
-                                          matches, start=pos)
-    if matches[0] == "#" or matches[0] == "^":
-      inc(numOpenSections)
-    else:
-      dec(numOpenSections)
-    pos = closingTagBounds.last+1
+    let optionalMatch = tmplate.find(openingOrClosingTagRegex, start=pos)
 
-  return closingTagBounds
+    if optionalMatch.isNone:
+      #TODO: Insert silent or exception flag
+      # Silent for now
+      dec(numOpenSections)
+      pos = tmplate.high
+    else:
+      let match = optionalMatch.get()
+      let tagTypeStr = match.captures[0]
+      if tagTypeStr == "#" or tagTypeStr == "^":
+        inc(numOpenSections)
+      else:
+        dec(numOpenSections)
+      result = match.captureBounds[-1].get()
+      pos = result.b+1
+
+proc parallelReplace(str: string, subs: openArray[
+                     tuple[pattern: Regex, repl: string]]): string =
+  ## Returns a modified copy of `s` with the substitutions in `subs`
+  ## applied in parallel.
+  ## Adapted from `re` module.
+  result = ""
+  var i = 0
+  while i < str.len:
+    block searchSubs:
+      for sub in subs:
+        var found = str.match(sub[0], start=i)
+        if not found.isNone:
+          add(result, sub[1])
+          inc(i, found.get().match().len)
+          break searchSubs
+      add(result, str[i])
+      inc(i)
+  # copy the rest:
+  add(result, substr(str, i))
 
 proc render*(tmplate: string, c: Context): string =
   ## Take a mustache template `tmplate` and an evaluation Context `c`
   ## and return the rendered string. This is the main procedure.
-  var matches : array[2, string]
   var renderings : seq[string] = @[]
   var sections : seq[string] = @[]
   var contexts : seq[Context] = @[]
   #TODO: join those two together
   var loopCounters : seq[int] = @[]
   var loopPositions : seq[int] = @[]
-
   var pos = 0
-
-  var tag = (bounds: (first: -1, last:0), key: "", symbol: "")
+  var tag = (bounds: -1 .. 0, key: "", symbol: "")
 
   contexts.add(c)
 
   while pos < tmplate.len:
     #Find a tag
-    tag.bounds = tmplate.findBounds(tagRegex, matches, start=pos)
-    tag.symbol = matches[0]
-    tag.key = if matches[1] != nil: matches[1].strip() else: matches[1]
-
-    #No tag
-    if tag.bounds.first == -1:
-      renderings.add(tmplate[pos..tmplate.len-1])
+    let optionalTag = tmplate.find(tagRegex, start=pos)
+    if optionalTag.isNone:
+      #No tag
+      renderings.add(tmplate[pos..tmplate.high])
       pos = tmplate.len
       continue
+    else:
+      let found = optionalTag.get()
+      tag.bounds = found.captureBounds[-1].get()
+      tag.symbol = found.captures[0]
+      if found.captures[1] != nil:
+        tag.key = found.captures[1].strip()
+      else:
+        tag.key = found.captures[1]
 
     # A tag
     if tag.symbol in @["!", "#", "^", "/"]:
@@ -262,10 +288,10 @@ proc render*(tmplate: string, c: Context): string =
       adjustForStandaloneIndentation(tag.bounds, tmplate)
 
     # output raw text before tag
-    if tag.bounds.first > 0:
-      renderings.add(tmplate[pos..tag.bounds.first-1])
+    if tag.bounds.a > 0:
+      renderings.add(tmplate[pos..tag.bounds.a-1])
 
-    pos = tag.bounds.last + 1
+    pos = tag.bounds.b + 1
 
     case tag.symbol
     of "!":
@@ -283,8 +309,8 @@ proc render*(tmplate: string, c: Context): string =
       if tag.symbol == "#":
         # Context or list
         if ctx == nil:
-          var closingBounds = findClosingBounds(tag.key, tmplate, pos)
-          pos = closingBounds.last+1
+          var closingBounds = tmplate.findClosingBounds(tag.key, pos)
+          pos = closingBounds.b+1
 
         elif ctx.kind == CObject:
           # enter a new section
@@ -295,22 +321,22 @@ proc render*(tmplate: string, c: Context): string =
           # update the array loop stacks
           if ctx.elems.len > 0:
             loopCounters.add(ctx.elems.len)
-            loopPositions.add(tag.bounds.last + 1)
+            loopPositions.add(tag.bounds.b + 1)
             sections.add(tag.key)
             contexts.add(ctx.elems[ctx.elems.len - loopCounters[^1]])
           else:
-            var closingBounds = findClosingBounds(tag.key, tmplate, pos)
-            pos = closingBounds.last+1
+            var closingBounds = tmplate.findClosingBounds(tag.key, pos)
+            pos = closingBounds.b+1
 
         elif ctx.kind == CValue:
           case ctx.val.kind
           of JBool:
             if not ctx.val.bval:
-              var closingBounds = findClosingBounds(tag.key, tmplate, pos)
-              pos = closingBounds.last+1
+              var closingBounds = tmplate.findClosingBounds(tag.key, pos)
+              pos = closingBounds.b+1
           of JNull:
-            var closingBounds = findClosingBounds(tag.key, tmplate, pos)
-            pos = closingBounds.last+1
+            var closingBounds = tmplate.findClosingBounds(tag.key, pos)
+            pos = closingBounds.b+1
           else: discard #we will render the text inside the section
 
       elif tag.symbol == "^":
@@ -320,23 +346,23 @@ proc render*(tmplate: string, c: Context): string =
         if ctx != nil:
           case ctx.kind
           of CObject:
-            var closingBounds = findClosingBounds(tag.key, tmplate, pos)
-            pos = closingBounds.last+1
+            var closingBounds = tmplate.findClosingBounds(tag.key, pos)
+            pos = closingBounds.b+1
           of CArray:
             if len(ctx.elems) != 0:
               # Non-empty list is falsy
-              var closingBounds = findClosingBounds(tag.key, tmplate, pos)
-              pos = closingBounds.last+1
+              var closingBounds = tmplate.findClosingBounds(tag.key, pos)
+              pos = closingBounds.b+1
           of CValue:
             case ctx.val.kind
             of JBool:
               if ctx.val.bval:
-                var closingBounds = findClosingBounds(tag.key, tmplate, pos)
-                pos = closingBounds.last+1
+                var closingBounds = tmplate.findClosingBounds(tag.key, pos)
+                pos = closingBounds.b+1
             of JNull: discard #we will render the text inside the section
             else:
-              var closingBounds = findClosingBounds(tag.key, tmplate, pos)
-              pos = closingBounds.last+1
+              var closingBounds = tmplate.findClosingBounds(tag.key, pos)
+              pos = closingBounds.b+1
 
     of "/":
       # Closing section tag
@@ -368,8 +394,8 @@ proc render*(tmplate: string, c: Context): string =
 
     else:
       #Normal substitution
-      renderings.add(parallelReplace(resolveString(contexts, tag.key),
-                                     htmlEscapeReplace))
+      let htmlEscaped = resolveString(contexts, tag.key).parallelReplace(htmlEscapeReplace)
+      renderings.add(htmlEscaped)
 
   result = join(renderings, "")
 

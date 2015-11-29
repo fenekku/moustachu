@@ -68,7 +68,22 @@ This will test against the selected specs copied from [mustache/spec](https://gi
 
 ##TODO
 
+- Turn this:
+
+```nim
+  context["array"] = newArrayContext()
+  for e in array:
+    context["array"].elems.add(string_from_e(e))
+```
+
+into this:
+
+```nim
+  context["array"] = map(string_from_e, array)
+```
+
+- lots of code refactorings
 - assumes well-formed template: remove that assumption
-- little code refactorings
 - Exception throwing toggle
 - Use to see what else to do/fix
+- make faster

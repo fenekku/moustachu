@@ -10,7 +10,7 @@ for kind, fn in walkDir("specs"):
     continue
 
   echo fn
-  echo repeatChar(fn.len, '=')
+  echo '='.repeat(len(fn))
   var j = parseFile(fn)
 
   for jn in j["tests"].items():
