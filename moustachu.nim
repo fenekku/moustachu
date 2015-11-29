@@ -2,6 +2,7 @@
 ## A mustache templating engine written in Nim.
 
 import re
+import sequtils
 import strutils
 import json
 
