@@ -8,7 +8,7 @@ Moustachu is a([N im](https://github.com/Araq/Nim))plementation of [Mustache](ht
 
 **In code**
 
-```nimrod
+```nim
 
 import moustachu
 
@@ -28,7 +28,7 @@ c["in_ca"] = true
 echo render(tmplate, c)
 ```
 
-For other examples look at the `specs` directory
+For other mustache examples look at the `specs` directory. For other moustachu-specific examples see below.
 
 **On the command line**
 
@@ -66,24 +66,37 @@ Get the source code:
 
 This will test against the selected specs copied from [mustache/spec](https://github.com/mustache/spec)
 
+##Further usage examples -> put in api tests
+
+```nim
+
+import unittest
+
+import moustachu
+
+let t = """
+{{#repos}}
+  <b>{{.}}</b>
+{{/repos}}
+"""
+
+var c : Context = newContext()
+c["repos"] = ["nimble", "hub", "moustachu"] #same with bool, int...
+
+let expected_result = """
+  <b>nimble</b>
+  <b>hub</b>
+  <b>moustachu</b>
+"""
+
+check render(t, c) == expected_result
+
+```
+
 ##TODO
-
-- Turn this:
-
-```nim
-  context["array"] = newArrayContext()
-  for e in array:
-    context["array"].elems.add(string_from_e(e))
-```
-
-into this:
-
-```nim
-  context["array"] = map(string_from_e, array)
-```
 
 - lots of code refactorings
 - assumes well-formed template: remove that assumption
 - Exception throwing toggle
-- Use to see what else to do/fix
 - make faster
+- Use to see what else to do/fix

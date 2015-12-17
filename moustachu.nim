@@ -102,12 +102,53 @@ proc `[]=`*(c: var Context; key: string, value: bool) =
   assert(c.kind == CObject)
   c[key] = newContext(newJBool(value))
 
+# template arrayAssignment(c: var Context, key: string, values: expr, operation) =
+#   ## template to assign `value` to `key` in Context `c`
+#   assert(c.kind == CObject)
+#   var contextList = newArrayContext()
+#   for v in value:
+#     contextList.elems.add(v)
+#   c[key] = contextList
+
 proc `[]=`*(c: var Context, key: string, value: openarray[Context]) =
   ## Assign `value` to `key` in Context `c`
+  # arrayAssignment(c, key, value)
   assert(c.kind == CObject)
   var contextList = newArrayContext()
   for v in value:
     contextList.elems.add(value)
+  c[key] = contextList
+
+proc `[]=`*(c: var Context, key: string, value: openarray[string]) =
+  ## Assign `value` to `key` in Context `c`
+  assert(c.kind == CObject)
+  var contextList = newArrayContext()
+  for v in value:
+    contextList.elems.add(newContext(newJString(v)))
+  c[key] = contextList
+
+proc `[]=`*(c: var Context, key: string, value: openarray[int]) =
+  ## Assign `value` to `key` in Context `c`
+  assert(c.kind == CObject)
+  var contextList = newArrayContext()
+  for v in value:
+    contextList.elems.add(newContext(newJInt(v)))
+  c[key] = contextList
+
+proc `[]=`*(c: var Context, key: string, value: openarray[float]) =
+  ## Assign `value` to `key` in Context `c`
+  assert(c.kind == CObject)
+  var contextList = newArrayContext()
+  for v in value:
+    contextList.elems.add(newContext(newJFloat(v)))
+  c[key] = contextList
+
+proc `[]=`*(c: var Context, key: string, value: openarray[bool]) =
+  ## Assign `value` to `key` in Context `c`
+  assert(c.kind == CObject)
+  var contextList = newArrayContext()
+  for v in value:
+    contextList.elems.add(newContext(newJBool(v)))
   c[key] = contextList
 
 # -----------------------------------------------------------------
