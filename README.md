@@ -28,7 +28,7 @@ c["in_ca"] = true
 echo render(tmplate, c)
 ```
 
-For other mustache examples look at the `specs` directory. For other moustachu-specific examples see below.
+For other mustache examples look at the `specs` directory. For other moustachu-specific examples see the `tests` folder.
 
 **On the command line**
 
@@ -65,33 +65,6 @@ Get the source code:
     $ nim c -r runTests.nim
 
 This will test against the selected specs copied from [mustache/spec](https://github.com/mustache/spec)
-
-##Further usage examples -> put in api tests
-
-```nim
-
-import unittest
-
-import moustachu
-
-let t = """
-{{#repos}}
-  <b>{{.}}</b>
-{{/repos}}
-"""
-
-var c : Context = newContext()
-c["repos"] = ["nimble", "hub", "moustachu"] #same with bool, int...
-
-let expected_result = """
-  <b>nimble</b>
-  <b>hub</b>
-  <b>moustachu</b>
-"""
-
-check render(t, c) == expected_result
-
-```
 
 ##TODO
 
