@@ -18,11 +18,11 @@ type
   ContextObj = object
     case kind*: ContextKind
     of CValue:
-      val*: JsonNode
+      val: JsonNode
     of CArray:
-      elems*: seq[Context]
+      elems: seq[Context]
     of CObject:
-      fields*: seq[tuple[key: string, val: Context]]
+      fields: seq[tuple[key: string, val: Context]]
 
 let
   tagOpening = r"\{\{"
