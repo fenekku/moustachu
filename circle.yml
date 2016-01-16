@@ -18,6 +18,7 @@ dependencies:
                 cd ${HOME}
                 git clone https://github.com/nim-lang/nimble.git
                 cd nimble
+                git checkout tags/v0.6.4
                 nim compile --run src/nimble install
             fi
 
