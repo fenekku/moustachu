@@ -27,7 +27,7 @@ type
 let
   tagOpening = r"\{\{"
   tagClosing = r"\}\}"
-  tagRegex = re(tagOpening & r"(\#|&|\^|!|\{|/)?((?:.|\s)+?)\}?" & tagClosing)
+  tagRegex = re(tagOpening & r"(\#|&|\^|!|\{|/|>)?((?:.|\s)+?)\}?" & tagClosing)
   htmlEscapeReplace = [(re"&", "&amp;"),
                        (re"<", "&lt;"),
                        (re">", "&gt;"),
@@ -81,6 +81,11 @@ proc `[]=`*(c: var Context, key: string, value: Context) =
       c.fields[i].val = value
       return
   c.fields.add((key, value))
+
+proc `[]=`*(c: var Context, key: string, value: JsonNode) =
+  ## Convert and assign `value` to `key` in `c`
+  assert(c.kind == CObject)
+  c[key] = newContext(value)
 
 proc `[]=`*(c: var Context; key: string, value: BiggestInt) =
   ## Assign `value` to `key` in Context `c`
@@ -302,8 +307,10 @@ proc render*(tmplate: string, c: Context): string =
       else:
         tag.key = found.captures[1]
 
+    let originalBounds = tag.bounds
+
     # A tag
-    if tag.symbol in @["!", "#", "^", "/"]:
+    if tag.symbol in @["!", "#", "^", "/", ">"]:
       # potentially standalone tag
       adjustForStandaloneIndentation(tag.bounds, tmplate)
 
@@ -412,8 +419,20 @@ proc render*(tmplate: string, c: Context): string =
             contexts.add(ctx.elems[ctx.elems.len - loopCounters[^1]])
             pos = loopPositions[^1]
 
+    of ">":
+      # Partial tag
+      var partialTemplate = resolveString(contexts, tag.key)
+      let indentation = originalBounds.a - tag.bounds.a
+      let indent = " ".repeat(indentation)
+      var lines : seq[string] = @[]
+      for line in partialTemplate.splitLines():
+        if line != "": lines.add(indent & line)
+        else: lines.add(line)
+      partialTemplate = lines.join("\n")
+      renderings.add(render(partialTemplate, contexts[contexts.high]))
+
     else:
-      #Normal substitution
+      # Normal substitution
       let htmlEscaped = resolveString(contexts, tag.key).parallelReplace(htmlEscapeReplace)
       renderings.add(htmlEscaped)
 

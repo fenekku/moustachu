@@ -39,6 +39,16 @@ $ moustachu <context>.json <template>.moustache --file=<output>
 
 The first version will print to stdout and the second will generate a file.
 
+##Compliance
+
+Moustachu supports the specs found in its specs directory:
+
+- comments
+- interpolation
+- inverted
+- partials
+- sections
+
 ##Installation
 
 The recommended way to install moustachu is through [nimble](https://github.com/nim-lang/nimble):
@@ -54,7 +64,7 @@ The moustachu package includes the moustachu binary to use on the command line a
 ##Design
 
 - Make the interfaces with the data structures as dynamic-like as possible
-- No lambdas, nor partials, nor set delimiters. At least for now. Let's keep it simple please.
+- No lambdas, nor set delimiters. At least for now. Let's keep it simple please.
 
 ##Test
 
@@ -68,7 +78,7 @@ This will test against the selected specs copied from [mustache/spec](https://gi
 
 ##TODO
 
-- lots of code refactorings
+- lots of code refactorings: use a tokenizer + state machine approach
 - assumes well-formed template: remove that assumption
 - Exception throwing toggle
 - make faster
