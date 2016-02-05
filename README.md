@@ -78,6 +78,7 @@ This will test against the selected specs copied from [mustache/spec](https://gi
 
 ##TODO
 
+- better printing of Context
 - lots of code refactorings: use a tokenizer + state machine approach
 - assumes well-formed template: remove that assumption
 - Exception throwing toggle
