@@ -1,11 +1,11 @@
 [Package]
 name        = "moustachu"
-version     = "0.9.1"
+version     = "0.10.0"
 author      = "Guillaume Viger"
 description = "Mustache templating for Nim"
 license     = "MIT"
 
-InstallFiles = "moustachu.nim"
+srcDir = "src"
 bin = "moustachu"
 
 [Deps]

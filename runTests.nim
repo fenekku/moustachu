@@ -24,14 +24,15 @@ for kind, fn in walkDir("specs"):
     except:
       echo ""
       echo "Test '", jn["name"].str, "' failed."
-      echo "Template: ", escape(jn["template"].str)
-      echo "Template: ", jn["template"].str
+      # echo "Template: ", escape(jn["template"].str)
+      echo "template: ", jn["template"].str
       echo "data: ", jn["data"]
       if jn.hasKey("partials"): echo "partials: ", jn["partials"]
-      echo "Context: ", aContext
-      echo "Render: ", escape(render(jn["template"].str, aContext))
-      echo "Expected: ", escape(jn["expected"].str)
+      echo "Render: ", render(jn["template"].str, aContext)
+      echo "Render escaped: ", escape(render(jn["template"].str, aContext))
+      echo "Expected: ", jn["expected"].str
+      echo "Expected escaped: ", escape(jn["expected"].str)
       quit(jn["desc"].str)
 
 
-echo "Tests pass."
+echo "Tests pass!"

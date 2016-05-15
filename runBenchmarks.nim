@@ -47,11 +47,13 @@ for i in 1..2000:
   result = templ.render(ctx)
 
 let t =  epochTime() - start
-echo result
+# echo result
 echo "Avg context creation and render time (s): ", t / 2000.0
 
 
 # 0.07263176703453064s nested sections
 # 0.0699 merge
 # 0.066979 no recursion
-# 0.15766 with pcre
+# 0.15766 with pcre (sometimes 0.1618221524953842)
+# 0.135369 with tokenizer
+# 0.02034837448596954 w/ tokenizer on release

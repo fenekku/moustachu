@@ -70,7 +70,7 @@ The moustachu package includes the moustachu binary to use on the command line a
 
 Get the source code:
 
-	$ git clone https://github.com/fenekku/moustachu.git
+    $ git clone https://github.com/fenekku/moustachu.git
     $ cd moustachu
     $ nim c -r runTests.nim
 
@@ -78,9 +78,4 @@ This will test against the selected specs copied from [mustache/spec](https://gi
 
 ##TODO
 
-- better printing of Context
-- lots of code refactorings: use a tokenizer + state machine approach
-- assumes well-formed template: remove that assumption
-- Exception throwing toggle
-- make faster
 - Use to see what else to do/fix
