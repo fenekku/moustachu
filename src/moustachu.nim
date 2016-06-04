@@ -19,7 +19,7 @@ let
                        (re("\""), "&quot;")]
 
 
-proc resolveToContext(contextStack: seq[Context], tagkey: string): Context =
+proc lookupContext(contextStack: seq[Context], tagkey: string): Context =
   ## Return the Context associated with `tagkey` where `tagkey`
   ## can be a dotted tag e.g. a.b.c .
   ## If the Context at `tagkey` does not exist, return nil.
@@ -39,11 +39,10 @@ proc resolveToContext(contextStack: seq[Context], tagkey: string): Context =
 
   return currCtx
 
-proc resolveToString(contextStack: seq[Context], tagkey: string): string =
+proc lookupString(contextStack: seq[Context], tagkey: string): string =
  ## Return the string associated with `tagkey` in Context `c`.
  ## If the Context at `tagkey` does not exist, return the empty string.
- let currCtx = resolveToContext(contextStack, tagkey)
- result = currCtx.resolveToString()
+ result = lookupContext(contextStack, tagkey).toString()
 
 proc ignore(tag: string, tokens: seq[Token], index: int): int =
   #ignore
@@ -86,16 +85,14 @@ proc parallelReplace(str: string,
   # copy the rest:
   add(result, substr(str, i))
 
-proc render*(tmplate: string, c: Context): string =
+proc render(tmplate: string, contextStack: seq[Context]): string =
   ## Take a mustache template `tmplate` and an evaluation Context `c`
   ## and return the rendered string. This is the main procedure.
   var renderings : seq[string] = @[]
 
   #Object
   var sections : seq[string] = @[]
-  var contexts : seq[Context] = @[]
-
-  contexts.add(c)
+  var contextStack = contextStack
 
   #Array
   var loopStartPositions : seq[int] = @[]
@@ -117,22 +114,22 @@ proc render*(tmplate: string, c: Context): string =
       discard
 
     of TokenType.escapedvariable:
-      var viewvalue = resolveToString(contexts, token.value)
+      var viewvalue = contextStack.lookupString(token.value)
       viewvalue = viewvalue.parallelReplace(htmlEscapeReplace)
       renderings.add(viewvalue)
 
     of TokenType.unescapedvariable:
-      var viewvalue = resolveToString(contexts, token.value)
+      var viewvalue = contextStack.lookupString(token.value)
       renderings.add(viewvalue)
 
     of TokenType.section:
-      let ctx = resolveToContext(contexts, token.value)
+      let ctx = contextStack.lookupContext(token.value)
       if ctx == nil:
         index = ignore(token.value, tokens, index)
         continue
       elif ctx.kind == CObject:
         # enter a new section
-        contexts.add(ctx)
+        contextStack.add(ctx)
         sections.add(token.value)
       elif ctx.kind == CArray:
         # update the array loop stacks
@@ -145,7 +142,7 @@ proc render*(tmplate: string, c: Context): string =
           loopStartPositions.add(index)
           loopCounters.add(ctx.len)
           sections.add(token.value)
-          contexts.add(ctx[ctx.len - loopCounters[^1]])
+          contextStack.add(ctx[ctx.len - loopCounters[^1]])
           continue
       elif ctx.kind == CValue:
         if not ctx:
@@ -154,7 +151,7 @@ proc render*(tmplate: string, c: Context): string =
         else: discard #we will render the text inside the section
 
     of TokenType.invertedsection:
-      let ctx = resolveToContext(contexts, token.value)
+      let ctx = contextStack.lookupContext(token.value)
       if ctx != nil:
         if ctx.kind == CObject:
           index = ignore(token.value, tokens, index)
@@ -170,23 +167,22 @@ proc render*(tmplate: string, c: Context): string =
           else: discard #we will render the text inside the section
 
     of TokenType.ender:
-      var ctx = resolveToContext(contexts, token.value)
+      var ctx = contextStack.lookupContext(token.value)
       if ctx != nil:
         if ctx.kind == CObject:
-          discard contexts.pop()
+          discard contextStack.pop()
           discard sections.pop()
         elif ctx.kind == CArray:
           if ctx.len > 0:
             loopCounters[^1] -= 1
+            discard contextStack.pop()
             if loopCounters[^1] == 0:
               discard loopCounters.pop()
               discard loopStartPositions.pop()
-              discard contexts.pop()
               discard sections.pop()
             else:
               index = loopStartPositions[^1]
-              discard contexts.pop()
-              contexts.add(ctx[ctx.len - loopCounters[^1]])
+              contextStack.add(ctx[ctx.len - loopCounters[^1]])
               continue
 
     of TokenType.indenter:
@@ -195,12 +191,12 @@ proc render*(tmplate: string, c: Context): string =
         renderings.add(indentation)
 
     of TokenType.partial:
-      var partialTemplate = resolveToString(contexts, token.value)
+      var partialTemplate = contextStack.lookupString(token.value)
       partialTemplate = partialTemplate.replace("\n", "\n" & indentation)
       if indentation != "":
         partialTemplate = partialTemplate.strip(leading=false, chars={' '})
       indentation = ""
-      renderings.add(render(partialTemplate, contexts[^1]))
+      renderings.add(render(partialTemplate, contextStack))
 
     else:
       renderings.add(token.value)
@@ -208,6 +204,11 @@ proc render*(tmplate: string, c: Context): string =
     index += 1
 
   result = join(renderings, "")
+
+
+proc render*(tmplate: string, c: Context): string =
+  var contextStack = @[c]
+  result = tmplate.render(contextStack)
 
 
 when isMainModule:

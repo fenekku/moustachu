@@ -20,6 +20,8 @@ type
     of CObject:
       fields: seq[tuple[key: string, val: Context]]
 
+## Builders
+
 proc newContext*(j : JsonNode = nil): Context =
   ## Create a new Context based on a JsonNode object
   new(result)
@@ -48,6 +50,8 @@ proc newArrayContext*(): Context =
   result.kind = CArray
   result.elems = @[]
 
+## Getters
+
 proc `[]`*(c: Context, key: string): Context =
   ## Return the Context associated with `key`.
   ## If the Context at `key` does not exist, return nil.
@@ -63,7 +67,8 @@ proc `[]`*(c: Context, index: int): Context =
   if c.kind != CArray: result = nil
   else: result = c.elems[index]
 
-# -------------- proc to manually build a Context ----------------
+## Setters
+
 proc `[]=`*(c: var Context, key: string, value: Context) =
   ## Assign a context `value` to `key` in context `c`
   assert(c.kind == CObject)
@@ -141,7 +146,9 @@ proc `$`*(c: Context): string =
     result &= "\nfields: {" & join(strArray, ", ") & "}"
   result &= "\n]"
 
-proc resolveToString*(c: Context): string =
+## Printers
+
+proc toString*(c: Context): string =
   ## Return string representation of `c` relevant to mustache
   if c != nil:
     if c.kind == CValue:
