@@ -1,8 +1,6 @@
 
 ## A mustache templating engine written in Nim.
 
-import options
-import nre
 import strutils
 import sequtils
 
@@ -12,16 +10,16 @@ import moustachupkg/tokenizer
 export context
 
 let
-  htmlEscapeReplace = [(re"&", "&amp;"),
-                       (re"<", "&lt;"),
-                       (re">", "&gt;"),
-                       (re"\\", "&#92;"),
-                       (re("\""), "&quot;")]
+  htmlReplaceBy = [("&", "&amp;"),
+                   ("<", "&lt;"),
+                   (">", "&gt;"),
+                   ("\\", "&#92;"),
+                   ("\"", "&quot;")]
 
 
 proc lookupContext(contextStack: seq[Context], tagkey: string): Context =
   ## Return the Context associated with `tagkey` where `tagkey`
-  ## can be a dotted tag e.g. a.b.c .
+  ## can be a dotted tag e.g. a.b.c
   ## If the Context at `tagkey` does not exist, return nil.
   var currCtx = contextStack[contextStack.high]
   if tagkey == ".": return currCtx
@@ -66,24 +64,11 @@ proc ignore(tag: string, tokens: seq[Token], index: int): int =
   return i
 
 proc parallelReplace(str: string,
-                     subs: openArray[tuple[pattern: Regex, repl: string]]): string =
-  ## Returns a modified copy of `s` with the substitutions in `subs`
-  ## applied in parallel.
-  ## Adapted from `re` module.
-  result = ""
-  var i = 0
-  while i < str.len:
-    block searchSubs:
-      for sub in subs:
-        var found = str.match(sub[0], start=i)
-        if not found.isNone:
-          add(result, sub[1])
-          inc(i, found.get().match().len)
-          break searchSubs
-      add(result, str[i])
-      inc(i)
-  # copy the rest:
-  add(result, substr(str, i))
+                     substitutions: openArray[tuple[pattern: string, by: string]]): string =
+  ## Returns a modified copy of `str` with the `substitutions` applied
+  var result = str
+  for sub in subsitutions:
+    result = result.replace(sub[0], sub[1])
 
 proc render(tmplate: string, contextStack: seq[Context]): string =
   ## Take a mustache template `tmplate` and an evaluation Context `c`
@@ -115,7 +100,7 @@ proc render(tmplate: string, contextStack: seq[Context]): string =
 
     of TokenType.escapedvariable:
       var viewvalue = contextStack.lookupString(token.value)
-      viewvalue = viewvalue.parallelReplace(htmlEscapeReplace)
+      viewvalue = viewvalue.parallelReplace(htmlReplaceBy)
       renderings.add(viewvalue)
 
     of TokenType.unescapedvariable:
@@ -205,7 +190,6 @@ proc render(tmplate: string, contextStack: seq[Context]): string =
 
   result = join(renderings, "")
 
-
 proc render*(tmplate: string, c: Context): string =
   var contextStack = @[c]
   result = tmplate.render(contextStack)
@@ -224,6 +208,7 @@ when isMainModule:
     argument tmplateFilename, string
     option outputFilename, string, "file", "f"
     exitoption "help", "h", usage()
+    errormsg usage()
 
   var c = newContext(parseFile(jsonFilename))
   var tmplate = readFile(tmplateFilename)
