@@ -1,6 +1,7 @@
 import json
 import sequtils
 import strutils
+import tables
 
 
 type
@@ -18,7 +19,7 @@ type
     of CArray:
       elems: seq[Context]
     of CObject:
-      fields: seq[tuple[key: string, val: Context]]
+      fields: Table[string, Context]
 
 ## Builders
 
@@ -27,14 +28,14 @@ proc newContext*(j : JsonNode = nil): Context =
   new(result)
   if j == nil:
     result.kind = CObject
-    result.fields = @[]
+    result.fields = initTable[string, Context](4)
   else:
     case j.kind
     of JObject:
       result.kind = CObject
-      result.fields = @[]
-      for key, val in items(j.fields):
-        result.fields.add((key, newContext(val)))
+      result.fields = initTable[string, Context](4)
+      for key, val in pairs(j.fields):
+        result.fields[key] = newContext(val)
     of JArray:
       result.kind = CArray
       result.elems = @[]
@@ -57,26 +58,18 @@ proc `[]`*(c: Context, key: string): Context =
   ## If the Context at `key` does not exist, return nil.
   assert(c != nil)
   if c.kind != CObject: return nil
-  for name, item in items(c.fields):
-    if name == key:
-      return item
-  return nil
+  if c.fields.hasKey(key): return c.fields[key] else: return nil
 
 proc `[]`*(c: Context, index: int): Context =
   assert(c != nil)
-  if c.kind != CArray: result = nil
-  else: result = c.elems[index]
+  if c.kind != CArray: return nil else: return c.elems[index]
 
 ## Setters
 
 proc `[]=`*(c: var Context, key: string, value: Context) =
   ## Assign a context `value` to `key` in context `c`
   assert(c.kind == CObject)
-  for i in 0..len(c.fields)-1:
-    if c.fields[i].key == key:
-      c.fields[i].val = value
-      return
-  c.fields.add((key, value))
+  c.fields[key] = value
 
 proc `[]=`*(c: var Context, key: string, value: JsonNode) =
   ## Convert and assign `value` to `key` in `c`
@@ -131,6 +124,8 @@ proc `[]=`*(c: var Context, key: string, value: openarray[bool]) =
   assert(c.kind == CObject)
   c[key] = map(value, proc(x: bool): Context = newContext(newJBool(x)))
 
+## Printers
+
 proc `$`*(c: Context): string =
   ## Return a string representing the context. Useful for debugging
   result = "Context->[kind: " & $c.kind
@@ -141,12 +136,10 @@ proc `$`*(c: Context): string =
     result &= "\nelems: [" & join(strArray, ", ") & "]"
   of CObject:
     var strArray : seq[string] = @[]
-    for key, val in items(c.fields):
+    for key, val in pairs(c.fields):
       strArray.add(key & ": " & $val)
     result &= "\nfields: {" & join(strArray, ", ") & "}"
   result &= "\n]"
-
-## Printers
 
 proc toString*(c: Context): string =
   ## Return string representation of `c` relevant to mustache

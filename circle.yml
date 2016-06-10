@@ -7,18 +7,18 @@ dependencies:
         - |
             if [ ! -x ${HOME}/nim/bin/nim ]; then
                 cd ${HOME}
-                wget --quiet http://builds.nim-lang.org/download/nim-0.13.0.tar.xz
+                wget --quiet http://builds.nim-lang.org/download/nim-0.14.0.tar.xz
                 mkdir nim/
-                tar xf nim-0.13.0.tar.xz --directory nim/ --strip-components=1
+                tar xf nim-0.14.0.tar.xz --directory nim/ --strip-components=1
                 cd nim/
                 ./build.sh
             fi
         - |
             if [ ! -x ${HOME}/.nimble/bin/nimble ]; then
                 cd ${HOME}
-                git clone https://github.com/nim-lang/nimble.git
+                git clone -b v0.7.4 https://github.com/nim-lang/nimble.git
                 cd nimble
-                nim compile --run src/nimble install
+                nim compile --run src/nimble install --accept
             fi
 
     cache_directories:
@@ -29,4 +29,4 @@ test:
     pre:
         - nimble install --accept
     override:
-        - nim compile --run runTests.nim
+        - nimble tests

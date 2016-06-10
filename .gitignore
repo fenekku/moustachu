@@ -3,3 +3,4 @@
 nimcache/
 moustachu
 runTests
+runBenchmarks

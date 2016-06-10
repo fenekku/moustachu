@@ -1,12 +1,17 @@
-[Package]
-name        = "moustachu"
-version     = "0.10.2"
+# Package
+
+version     = "0.10.3"
 author      = "Guillaume Viger"
 description = "Mustache templating for Nim"
 license     = "MIT"
 
 srcDir = "src"
-bin = "moustachu"
+bin = @["moustachu"]
 
-[Deps]
-Requires: "nim >= 0.12.0 & < 0.14, commandeer >= 0.4.0"
+# Dependencies
+
+requires "nim >= 0.14.0 & < 0.15.0"
+requires "commandeer >= 0.10.4"
+
+task tests, "Run the Moustachu tester":
+  exec "nim compile --run runTests"

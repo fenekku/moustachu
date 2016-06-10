@@ -66,8 +66,8 @@ proc ignore(tag: string, tokens: seq[Token], index: int): int =
 proc parallelReplace(str: string,
                      substitutions: openArray[tuple[pattern: string, by: string]]): string =
   ## Returns a modified copy of `str` with the `substitutions` applied
-  var result = str
-  for sub in subsitutions:
+  result = str
+  for sub in substitutions:
     result = result.replace(sub[0], sub[1])
 
 proc render(tmplate: string, contextStack: seq[Context]): string =
@@ -201,13 +201,14 @@ when isMainModule:
   import commandeer
 
   proc usage(): string =
-    result = "Usage: moustachu <context>.json <template>.mustache [--file=<outputFilename>]"
+    result = "Usage! moustachu <context>.json <template>.mustache [--file=<outputFilename>]"
 
   commandline:
     argument jsonFilename, string
     argument tmplateFilename, string
     option outputFilename, string, "file", "f"
     exitoption "help", "h", usage()
+    exitoption "version", "v", "0.10.3"
     errormsg usage()
 
   var c = newContext(parseFile(jsonFilename))
