@@ -1,10 +1,10 @@
-#Moustachu
+# Moustachu
 
 [![Build Status](https://circleci.com/gh/fenekku/moustachu/tree/master.png?style=shield&circle-token=d918d8055e112fb5661e85eba92691e39d1d4d12)](https://circleci.com/gh/fenekku/moustachu)
 
 Moustachu is a([N im](https://github.com/Araq/Nim))plementation of [Mustache](https://github.com/mustache/mustache) (get it?). Mustache is "logic-less templating".
 
-##Usage
+## Usage
 
 **In code**
 
@@ -39,7 +39,7 @@ $ moustachu <context>.json <template>.moustache --file=<output>
 
 The first version will print to stdout and the second will generate a file.
 
-##Compliance
+## Compliance
 
 Moustachu supports the specs found in its specs directory:
 
@@ -49,7 +49,7 @@ Moustachu supports the specs found in its specs directory:
 - partials
 - sections
 
-##Installation
+## Installation
 
 The recommended way to install moustachu is through [nimble](https://github.com/nim-lang/nimble):
 
@@ -61,12 +61,12 @@ This will install the latest tagged version of moustachu.
 
 The moustachu package includes the moustachu binary to use on the command line and the moustachu library to use in your code.
 
-##Design
+## Design
 
 - Make the interfaces with the data structures as dynamic-like as possible
 - No lambdas, nor set delimiters. At least for now. Let's keep it simple please.
 
-##Test
+## Test
 
 Get the source code:
 
@@ -76,6 +76,6 @@ Get the source code:
 
 This will test against the selected specs copied from [mustache/spec](https://github.com/mustache/spec)
 
-##TODO
+## TODO
 
 - Use to see what else to do/fix
