@@ -10,7 +10,7 @@ bin = @["moustachu"]
 
 # Dependencies
 
-requires "nim >= 0.14.0 & < 0.15.0"
+requires "nim >= 0.14.0"
 requires "commandeer >= 0.10.4"
 
 task tests, "Run the Moustachu tester":
