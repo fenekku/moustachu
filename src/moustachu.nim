@@ -3,6 +3,7 @@
 
 import strutils
 import sequtils
+import os
 
 import moustachupkg/context
 import moustachupkg/tokenizer
@@ -70,8 +71,9 @@ proc parallelReplace(str: string,
   for sub in substitutions:
     result = result.replace(sub[0], sub[1])
 
-proc render(tmplate: string, contextStack: seq[Context]): string =
-  ## Take a mustache template `tmplate` and an evaluation Context `c`
+proc render(tmplate: string, contextStack: seq[Context], partialsDir="."): string =
+  ## Take a mustache template `tmplate`, an evaluation Context `c`, and an optional
+  ## path `partialsDir` (by default set to the current directory) which may contain partial files
   ## and return the rendered string. This is the main procedure.
   var renderings : seq[string] = @[]
 
@@ -114,8 +116,12 @@ proc render(tmplate: string, contextStack: seq[Context]): string =
         continue
       elif ctx.kind == CObject:
         # enter a new section
-        contextStack.add(ctx)
-        sections.add(token.value)
+        if ctx.len == 0:
+          index = ignore(token.value, tokens, index)
+          continue
+        else:
+          contextStack.add(ctx)
+          sections.add(token.value)
       elif ctx.kind == CArray:
         # update the array loop stacks
         if ctx.len == 0:
@@ -177,11 +183,13 @@ proc render(tmplate: string, contextStack: seq[Context]): string =
 
     of TokenType.partial:
       var partialTemplate = contextStack.lookupString(token.value)
+      if partialTemplate == "":
+        partialTemplate = partialsDir.joinPath(token.value & ".mustache").readFile
       partialTemplate = partialTemplate.replace("\n", "\n" & indentation)
       if indentation != "":
         partialTemplate = partialTemplate.strip(leading=false, chars={' '})
       indentation = ""
-      renderings.add(render(partialTemplate, contextStack))
+      renderings.add(render(partialTemplate, contextStack, partialsDir))
 
     else:
       renderings.add(token.value)
@@ -190,14 +198,13 @@ proc render(tmplate: string, contextStack: seq[Context]): string =
 
   result = join(renderings, "")
 
-proc render*(tmplate: string, c: Context): string =
+proc render*(tmplate: string, c: Context, partialsDir="."): string =
   var contextStack = @[c]
-  result = tmplate.render(contextStack)
+  result = tmplate.render(contextStack, partialsDir)
 
 
 when isMainModule:
   import json
-
   import commandeer
 
   proc usage(): string =
@@ -213,8 +220,9 @@ when isMainModule:
 
   var c = newContext(parseFile(jsonFilename))
   var tmplate = readFile(tmplateFilename)
+  var pwd = parentDir(tmplateFileName)
 
   if outputFilename.isNil():
-    echo render(tmplate, c)
+    echo render(tmplate, c, pwd)
   else:
-    writeFile(outputFilename, render(tmplate, c))
+    writeFile(outputFilename, render(tmplate, c, pwd))
