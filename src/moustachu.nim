@@ -184,7 +184,8 @@ proc render(tmplate: string, contextStack: seq[Context], partialsDir="."): strin
     of TokenType.partial:
       var partialTemplate = contextStack.lookupString(token.value)
       if partialTemplate == "":
-        partialTemplate = partialsDir.joinPath(token.value & ".mustache").readFile
+        var partialsFileName = partialsDir.joinPath(token.value & ".mustache")
+        partialTemplate = (try: readFile(partialsFileName) except: "")
       partialTemplate = partialTemplate.replace("\n", "\n" & indentation)
       if indentation != "":
         partialTemplate = partialTemplate.strip(leading=false, chars={' '})
