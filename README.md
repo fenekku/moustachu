@@ -30,6 +30,27 @@ echo render(tmplate, c)
 
 For other mustache examples look at the `specs` directory. For other moustachu-specific examples see the `tests` folder.
 
+For the formal description of the mustache format, please visit [mustache(5)](https://mustache.github.io/mustache.5.html). Ignore the sections on "lambdas" and "set delimeters".
+
+Not mentioned in the formal description (but mentioned in the spec code), the spec also supports using a dot `.` as an "implicit iterator" for arrays containing unnamed items. For example, a sequence of strings or integers would use an implicit iterator:
+
+```nim
+import moustachu
+
+var c : Context = newContext()
+c["zoo_name"] = "Anytown"
+c["animals"] = @["lions", "tigers", "bears"]
+
+
+var tmplate = """Animals at the {{zoo_name}} Zoo:
+
+{{#animals}}
+* {{.}}
+{{/animals}}"""
+
+echo render(tmplate, c)
+```
+
 **On the command line**
 
 ```

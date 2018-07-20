@@ -10,14 +10,6 @@ import moustachupkg/tokenizer
 
 export context
 
-let
-  htmlReplaceBy = [("&", "&amp;"),
-                   ("<", "&lt;"),
-                   (">", "&gt;"),
-                   ("\\", "&#92;"),
-                   ("\"", "&quot;")]
-
-
 proc lookupContext(contextStack: seq[Context], tagkey: string): Context =
   ## Return the Context associated with `tagkey` where `tagkey`
   ## can be a dotted tag e.g. a.b.c
@@ -60,7 +52,8 @@ proc ignore(tag: string, tokens: seq[Token], index: int): int =
     else: discard
 
     i += 1
-    nexttoken = tokens[i]
+    if i < lentokens:
+      nexttoken = tokens[i]
 
   return i
 
@@ -75,6 +68,13 @@ proc render(tmplate: string, contextStack: seq[Context], partialsDir="."): strin
   ## Take a mustache template `tmplate`, an evaluation Context `c`, and an optional
   ## path `partialsDir` (by default set to the current directory) which may contain partial files
   ## and return the rendered string. This is the main procedure.
+  let
+    htmlReplaceBy = [("&", "&amp;"),
+                     ("<", "&lt;"),
+                     (">", "&gt;"),
+                     ("\\", "&#92;"),
+                     ("\"", "&quot;")]
+
   var renderings : seq[string] = @[]
 
   #Object
@@ -202,6 +202,29 @@ proc render(tmplate: string, contextStack: seq[Context], partialsDir="."): strin
 proc render*(tmplate: string, c: Context, partialsDir="."): string =
   var contextStack = @[c]
   result = tmplate.render(contextStack, partialsDir)
+
+proc renderFile*(filepath: string, ctx: Context, partialsDir:string=nil): string =
+  ## renders a mustache template from a file
+  ## 
+  ## @param filepath
+  ## @param ctx           the values passed into the template
+  ## @param partialsDir   if not set; pulls path from filepath
+  var
+    dir, name, ext, finalDir: string
+    content: string = nil
+  result = ""
+  if partialsDir == nil:
+    (dir, name, ext) = splitFile(filepath)
+    if dir != "":
+      finalDir = dir
+    else:
+      finalDir = "."
+  else:
+    finalDir = partialsDir
+
+  if fileExists(filepath):
+    content = readFile(filepath)
+  result = render(content, ctx, partialsDir=finalDir)
 
 
 when isMainModule:
