@@ -45,6 +45,46 @@ proc newContext*(j : JsonNode = nil): Context =
       result.kind = CValue
       result.val = j
 
+proc newContext*(c: Context): Context =
+  ## Create a new Context based on an existing context. The new Context
+  ## is an unconnected copy of the existing context simply containing the
+  ## values of the original.
+  ## 
+  ## Some code to demonstrate:
+  ## 
+  ## .. code:: nim
+  ## 
+  ##     import moustachu
+  ## 
+  ##     var a = newContext()
+  ##     a["test"] = "original"
+  ## 
+  ##     var b = a              # copy the pointer to b
+  ##     var c = newContext(a)  # copy the content to c
+  ##
+  ##     b["test"] = "changed"
+  ## 
+  ##     echo a["test"].toString()  # -> "changed"
+  ##     echo b["test"].toString()  # -> "changed"
+  ##     echo c["test"].toString()  # -> "original"
+  new(result)
+  if c == nil:
+    result.kind = CObject
+    result.fields = initTable[string, Context](4)
+  else:
+    result.kind = c.kind
+    case c.kind
+    of CValue:
+      result.val = c.val
+    of CArray:
+      result.elems = @[]
+      for item in c.elems:
+        result.elems.add(newContext(item))
+    of CObject:
+      result.fields = initTable[string, Context](4)
+      for key, val in pairs(c.fields):
+        result.fields[key] = newContext(val)
+
 proc newArrayContext*(): Context =
   ## Create a new Context of kind CArray
   new(result)
