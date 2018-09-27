@@ -203,7 +203,7 @@ proc render*(tmplate: string, c: Context, partialsDir="."): string =
   var contextStack = @[c]
   result = tmplate.render(contextStack, partialsDir)
 
-proc renderFile*(filepath: string, ctx: Context, partialsDir:string=nil): string =
+proc renderFile*(filepath: string, ctx: Context, partialsDir:string=""): string =
   ## renders a mustache template from a file
   ## 
   ## @param filepath
@@ -211,9 +211,9 @@ proc renderFile*(filepath: string, ctx: Context, partialsDir:string=nil): string
   ## @param partialsDir   if not set; pulls path from filepath
   var
     dir, name, ext, finalDir: string
-    content: string = nil
+    content: string = ""
   result = ""
-  if partialsDir == nil:
+  if partialsDir == "":
     (dir, name, ext) = splitFile(filepath)
     if dir != "":
       finalDir = dir
@@ -246,7 +246,7 @@ when isMainModule:
   var tmplate = readFile(tmplateFilename)
   var pwd = parentDir(tmplateFileName)
 
-  if outputFilename.isNil():
+  if outputFilename.len == 0:
     echo render(tmplate, c, pwd)
   else:
     writeFile(outputFilename, render(tmplate, c, pwd))

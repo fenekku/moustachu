@@ -207,12 +207,12 @@ proc `$`*(c: Context): string =
   result = "Context->[kind: " & $c.kind
   case c.kind
   of CValue:
-    if c.val.str == nil:
-      result &= "\nval: nil"
+    if c.val.str == "":
+      result &= "\nval: "
     else:
       result &= "\nval: " & $c.val
   of CArray:
-    if c.elems == nil:
+    if c.elems == @[]:
       result &= "\nnot initialized"
     else:
       var strArray = map(c.elems, proc(c: Context): string = $c)
@@ -230,7 +230,7 @@ proc toString*(c: Context): string =
     if c.kind == CValue:
       case c.val.kind
       of JString:
-        if c.val.str==nil:
+        if c.val.str == "":
           return ""
         return c.val.str
       of JFloat:
@@ -263,7 +263,7 @@ converter toBool*(c: Context): bool =
   of JString: result = c.val.str != ""
   else: result = true
 
-proc newContext*[T: string| int | bool | float](d: openarray[tuple[key: string, value: T ]]): Context =
+proc newContext*[T: string | int | bool | float](d: openarray[tuple[key: string, value: T ]]): Context =
   ## Create a new Context based on an array of [string, T] tuples
   ## 
   ## For example, you could do:
