@@ -205,7 +205,7 @@ proc render*(tmplate: string, c: Context, partialsDir="."): string =
 
 proc renderFile*(filepath: string, ctx: Context, partialsDir:string=""): string =
   ## renders a mustache template from a file
-  ## 
+  ##
   ## @param filepath
   ## @param ctx           the values passed into the template
   ## @param partialsDir   if not set; pulls path from filepath
@@ -239,7 +239,7 @@ when isMainModule:
     argument tmplateFilename, string
     option outputFilename, string, "file", "f"
     exitoption "help", "h", usage()
-    exitoption "version", "v", "0.10.3"
+    exitoption "version", "v", "0.13.0"
     errormsg usage()
 
   var c = newContext(parseFile(jsonFilename))
