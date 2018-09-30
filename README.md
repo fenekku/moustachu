@@ -86,14 +86,20 @@ The moustachu package includes the moustachu binary to use on the command line a
 
 - Make the interfaces with the data structures as dynamic-like as possible
 - No lambdas, nor set delimiters. At least for now. Let's keep it simple please.
+- Test in context. Tests are run on the installed package because that
+  is what people get.
 
-## Test
+## Develop and Test
 
 Get the source code:
 
     $ git clone https://github.com/fenekku/moustachu.git
     $ cd moustachu
-    $ nim c -r runTests.nim
+    # make your changes ...
+    # test
+    $ nimble tests
+    # run benchmarks
+    $ nimble benchmarks
 
 This will test against the selected specs copied from [mustache/spec](https://github.com/mustache/spec)
 

@@ -17,5 +17,5 @@ requires "commandeer >= 0.10.4"
 task tests, "Run the Moustachu tester":
   exec "nim compile --run runTests"
 
-task benchmark, "Run the Moustachu benchmarks":
+task benchmarks, "Run the Moustachu benchmarks":
   exec "nim compile --run runBenchmarks"
