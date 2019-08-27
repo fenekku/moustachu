@@ -27,22 +27,22 @@ proc newContext*(j : JsonNode = nil): Context =
   ## Create a new Context based on a JsonNode object
   new(result)
   if j == nil:
-    result.kind = CObject
+    result = Context(kind: CObject)
     result.fields = initTable[string, Context](4)
   else:
     case j.kind
     of JObject:
-      result.kind = CObject
+      result = Context(kind: CObject)
       result.fields = initTable[string, Context](4)
       for key, val in pairs(j.fields):
         result.fields[key] = newContext(val)
     of JArray:
-      result.kind = CArray
+      result = Context(kind: CArray)
       result.elems = @[]
       for val in j.elems:
         result.elems.add(newContext(val))
     else:
-      result.kind = CValue
+      result = Context(kind: CValue)
       result.val = j
 
 proc newContext*(c: Context): Context =
