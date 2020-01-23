@@ -4,6 +4,7 @@
 import strutils
 import sequtils
 import os
+import json
 
 import moustachupkg/context
 import moustachupkg/tokenizer
@@ -65,9 +66,9 @@ proc parallelReplace(str: string,
     result = result.replace(sub[0], sub[1])
 
 proc render(tmplate: string, contextStack: seq[Context], partialsDir="."): string =
-  ## Take a mustache template `tmplate`, an evaluation Context `c`, and an optional
-  ## path `partialsDir` (by default set to the current directory) which may contain partial files
-  ## and return the rendered string. This is the main procedure.
+  # Take a mustache template `tmplate`, an evaluation Context `c`, and an optional
+  # path `partialsDir` (by default set to the current directory) which may contain partial files
+  # and return the rendered string. This is the main procedure.
   let
     htmlReplaceBy = [("&", "&amp;"),
                      ("<", "&lt;"),
@@ -200,10 +201,21 @@ proc render(tmplate: string, contextStack: seq[Context], partialsDir="."): strin
   result = join(renderings, "")
 
 proc render*(tmplate: string, c: Context, partialsDir="."): string =
+  ## Take a mustache template `tmplate`, an evaluation Context `c`, and an optional
+  ## path `partialsDir` (by default set to the current directory) which may contain partial files
+  ## and return the rendered string.
   var contextStack = @[c]
   result = tmplate.render(contextStack, partialsDir)
 
-proc renderFile*(filepath: string, ctx: Context, partialsDir:string=""): string =
+proc render*(tmplate: string, jsonContext: JsonNode, partialsDir="."): string =
+  ## Take a mustache template `tmplate`, an evaluation context as a JsonNode, and an optional
+  ## path `partialsDir` (by default set to the current directory) which may contain partial files
+  ## and return the rendered string.
+  let nc = newContext(jsonContext)
+  var contextStack = @[nc]
+  result = tmplate.render(contextStack, partialsDir)
+
+proc renderFile*(filepath: string, ctx: Context, partialsDir: string=""): string =
   ## renders a mustache template from a file
   ##
   ## @param filepath
@@ -226,6 +238,14 @@ proc renderFile*(filepath: string, ctx: Context, partialsDir:string=""): string 
     content = readFile(filepath)
   result = render(content, ctx, partialsDir=finalDir)
 
+proc renderFile*(filepath: string, jsonContext: JsonNode, partialsDir: string=""): string =
+  ## renders a mustache template from a file
+  ##
+  ## @param filepath
+  ## @param jsonContext   the values passed into the template (as JSON)
+  ## @param partialsDir   if not set; pulls path from filepath
+  let nc = newContext(jsonContext)
+  result = renderFile(filepath, nc, partialsDir)
 
 when isMainModule:
   import json
