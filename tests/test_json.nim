@@ -13,6 +13,7 @@ suite "test json input":
     j["float"] = newJFloat(3.14)
     let expected_result = "s=hello,i=3,f=3.14"
     check render(objTemplate, j) == expected_result
+    
   test "from file":
     var j = newJObject()
     j["string"] = newJString("hello")

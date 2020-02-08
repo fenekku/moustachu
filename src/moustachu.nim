@@ -65,10 +65,10 @@ proc parallelReplace(str: string,
   for sub in substitutions:
     result = result.replace(sub[0], sub[1])
 
-proc render(tmplate: string, contextStack: seq[Context], partialsDir="."): string =
-  # Take a mustache template `tmplate`, an evaluation Context `c`, and an optional
-  # path `partialsDir` (by default set to the current directory) which may contain partial files
-  # and return the rendered string. This is the main procedure.
+proc render*(tmplate: string, contextStack: seq[Context], partialsDir="."): string =
+  ## Take a mustache template `tmplate`, a seq of evaluation Context's, and an optional
+  ## path `partialsDir` (by default set to the current directory) which may contain partial files
+  ## and return the rendered string. This is the main procedure.
   let
     htmlReplaceBy = [("&", "&amp;"),
                      ("<", "&lt;"),

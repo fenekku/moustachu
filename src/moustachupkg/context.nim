@@ -87,8 +87,7 @@ proc newContext*(c: Context): Context =
 
 proc newArrayContext*(): Context =
   ## Create a new Context of kind CArray
-  new(result)
-  result.kind = CArray
+  result = Context(kind: CArray)
   result.elems = @[]
 
 proc internal_set(value: string): Context =
